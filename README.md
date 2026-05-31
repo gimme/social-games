@@ -43,14 +43,20 @@ Types are checked in your editor via `// @ts-check` + JSDoc comments and
 ## Run it locally
 
 Because the pages use ES modules, open the site through a local web server
-rather than double-clicking the file:
+rather than double-clicking the file. A `Makefile` wraps it:
 
 ```bash
-python3 -m http.server 8000
-# then open http://localhost:8000
+make serve            # then open the URL it prints
+make serve PORT=9000  # use a different port
 ```
 
-(Any static file server works — e.g. `npx serve`.)
+This serves the folder with HTTP caching disabled, so your edits show up on a
+plain refresh — including on mobile browsers like Samsung Internet, which
+otherwise cache `*.js`/`*.css` and keep serving stale files. (Plain `python3 -m
+http.server` is the one that *doesn't* disable caching.)
+
+It's pure Python and **dev-only** — nothing ships. GitHub Pages serves the raw
+files exactly as they are in the repo.
 
 ## Add a new game
 
