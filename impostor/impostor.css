@@ -190,6 +190,35 @@
   text-align: center;
 }
 
+/* A card that is itself the tap target (no separate button beneath it). */
+.card--tap {
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: transform 0.04s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.card--tap:hover {
+  border-color: var(--accent);
+}
+
+.card--tap:active {
+  transform: translateY(1px);
+}
+
+.card--tap:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+/* "Tap to continue" hint shown inside a tappable card. */
+.card__tap {
+  margin-top: var(--space-2);
+  color: var(--accent);
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
 .card--gate {
   border-style: dashed;
   border-color: var(--accent);

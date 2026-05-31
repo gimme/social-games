@@ -52,7 +52,7 @@ const STORAGE_KEY = 'impostor.v2';
 
 /**
  * @typedef {Object} GameState
- * @property {'setup' | 'entry' | 'reveal' | 'play' | 'result'} phase
+ * @property {'setup' | 'entry' | 'ready' | 'reveal' | 'play' | 'result'} phase
  * @property {number} playerCount
  * @property {Settings} settings
  * @property {string[]} pool                 Distinct words (display form), shared & shuffled.
@@ -371,29 +371,44 @@ function load() {
       };
     }
     if (Array.isArray(data.pool)) {
-      state.pool = data.pool.filter(
-        /** @param {unknown} w @returns {w is string} */ (w) => typeof w === 'string',
-      );
+      state.pool = data.pool
+        .filter(
+          /** @param {unknown} w @returns {w is string} */ (w) => typeof w === 'string',
+        )
+        .map(/** @param {string} w */ (w) => w.toUpperCase());
     }
     if (Array.isArray(data.recentWords)) {
-      state.recentWords = data.recentWords.filter(
-        /** @param {unknown} w @returns {w is string} */ (w) => typeof w === 'string',
-      );
+      state.recentWords = data.recentWords
+        .filter(
+          /** @param {unknown} w @returns {w is string} */ (w) => typeof w === 'string',
+        )
+        .map(/** @param {string} w */ (w) => w.toUpperCase());
     }
     if (data.round && typeof data.round === 'object') {
-      state.round = /** @type {Round} */ (data.round);
+      // Legacy rounds may hold mixed-case words; present them in caps too.
+      const r = data.round;
+      if (typeof r.realWord === 'string') r.realWord = r.realWord.toUpperCase();
+      if (Array.isArray(r.assignments)) {
+        for (const a of r.assignments) {
+          if (a && typeof a.word === 'string') a.word = a.word.toUpperCase();
+        }
+      }
+      state.round = /** @type {Round} */ (r);
     }
 
     const phase = data.phase;
     if (phase === 'reveal' || phase === 'play' || phase === 'result') {
-      // Only restore an in-progress round if we actually have its data.
+      // Only restore an in-progress round if we actually have its data;
+      // otherwise fall back to the ready lobby (or setup) using the pool.
       if (state.round) {
         state.phase = phase;
       } else {
-        state.phase = state.pool.length > 0 ? 'play' : 'setup';
+        state.phase = state.pool.length > 0 ? 'ready' : 'setup';
       }
     } else if (phase === 'entry') {
       state.phase = 'entry';
+    } else if (phase === 'ready') {
+      state.phase = state.pool.length > 0 ? 'ready' : 'setup';
     } else {
       state.phase = 'setup';
     }
@@ -433,6 +448,28 @@ function el(tag, className, text) {
   const node = document.createElement(tag);
   if (className) node.className = className;
   if (text != null) node.textContent = text;
+  return node;
+}
+
+/**
+ * Make a card behave as a big tap target (the card *is* the button — no
+ * separate button beneath it). Adds pointer + keyboard activation.
+ *
+ * @param {HTMLElement} node
+ * @param {() => void} onActivate
+ * @returns {HTMLElement}
+ */
+function makeTappable(node, onActivate) {
+  node.classList.add('card--tap');
+  node.setAttribute('role', 'button');
+  node.setAttribute('tabindex', '0');
+  node.addEventListener('click', onActivate);
+  node.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' || e.key === ' ') {
+      e.preventDefault();
+      onActivate();
+    }
+  });
   return node;
 }
 
@@ -543,6 +580,12 @@ function goEntry() {
   render();
 }
 
+/** The lobby between entering words and revealing roles: play / add more / start over. */
+function goReady() {
+  state.phase = 'ready';
+  render();
+}
+
 /** Build a round from the current pool and start the reveal pass-around. */
 function startRound() {
   if (distinctWords(state.pool).length === 0) return;
@@ -571,7 +614,8 @@ function renderSetup() {
       'screen__lede',
       'Everyone secretly types words into one shared pool. Then the app hands ' +
         'out the same secret word to all — except the impostor. Pass the phone ' +
-        'around, give one-word clues, and work out who is faking.',
+        'around, give one-word clues (2 each), and work out who is faking. But ' +
+        'be careful — if the impostor guesses the word, they win!',
     ),
   );
 
@@ -642,15 +686,15 @@ function renderAdvanced() {
   const n = state.playerCount;
 
   body.append(
-    pctStepper('No impostor', s.nonePct, (v) => {
-      s.nonePct = v;
+    pctStepper('All impostors', s.everyonePct, (v) => {
+      s.everyonePct = v;
       save();
       render();
     }),
   );
   body.append(
-    pctStepper('Everyone’s the impostor', s.everyonePct, (v) => {
-      s.everyonePct = v;
+    pctStepper('No impostors', s.nonePct, (v) => {
+      s.nonePct = v;
       save();
       render();
     }),
@@ -668,11 +712,16 @@ function renderAdvanced() {
     ),
   );
   body.append(
-    pctStepper('Decoy round', s.decoyPct, (v) => {
-      s.decoyPct = v;
-      save();
-      render();
-    }),
+    pctStepper(
+      'Decoy round',
+      s.decoyPct,
+      (v) => {
+        s.decoyPct = v;
+        save();
+        render();
+      },
+      { note: 'Impostors unknowingly get a different word' },
+    ),
   );
 
   body.append(
@@ -697,10 +746,8 @@ function renderPassGate(label, action, onPass) {
   const card = el('section', 'card card--gate');
   card.append(el('span', 'card__hint', label));
   card.append(el('span', 'card__action', action));
+  makeTappable(card, onPass);
   screen.append(card);
-  const btn = el('button', 'btn', action);
-  btn.addEventListener('click', onPass);
-  screen.append(btn);
   return screen;
 }
 
@@ -727,7 +774,7 @@ function renderEntry() {
     screen.append(categoryBanner(state.settings.category.trim()));
   }
   screen.append(
-    el('p', 'screen__hint', 'Aim for about 2 words. Nobody sees who added what.'),
+    el('p', 'screen__hint', 'Aim for 2+ words. Nobody sees who added what.'),
   );
 
   // Input row.
@@ -736,7 +783,18 @@ function renderEntry() {
   input.type = 'text';
   input.placeholder = 'Type a word…';
   input.autocomplete = 'off';
-  /** @type {HTMLInputElement} */ (input).setAttribute('autocapitalize', 'none');
+  // Ask the (mobile) keyboard for capitals, and force the live value to caps so
+  // the letters appear uppercase the instant they're typed — not just on Add.
+  input.setAttribute('autocapitalize', 'characters');
+  input.addEventListener('input', () => {
+    const upper = input.value.toUpperCase();
+    if (upper === input.value) return;
+    // Preserve the caret (upper-casing keeps length for these characters).
+    const start = input.selectionStart ?? upper.length;
+    const end = input.selectionEnd ?? upper.length;
+    input.value = upper;
+    input.setSelectionRange(start, end);
+  });
   const add = /** @type {HTMLButtonElement} */ (el('button', 'btn entry__add', 'Add'));
   add.type = 'submit';
   form.append(input, add);
@@ -769,9 +827,12 @@ function renderEntry() {
     const poolKeys = new Set(state.pool.map(normaliseWord));
     const draftKeys = new Set(state.draftWords.map(normaliseWord));
     // A player's duplicate of their own word (or one already in the pool) is
-    // ignored. Display form preserves the player's casing.
+    // ignored.
     if (draftKeys.has(norm)) return;
-    const display = raw.trim().replace(/\s+/g, ' ');
+    // Trim, collapse inner whitespace, and upper-case the whole word — a final
+    // safety net on top of the live per-keystroke upper-casing, so casing never
+    // causes confusion no matter how the text got into the box.
+    const display = raw.trim().replace(/\s+/g, ' ').toUpperCase();
     state.draftWords.push(display);
     if (!poolKeys.has(norm)) {
       state.pool.push(display);
@@ -789,15 +850,15 @@ function renderEntry() {
   screen.append(chips);
   renderChips();
 
-  const done = el('button', 'btn', isLast ? 'Done → start round' : 'Done → pass to next');
+  const done = el('button', 'btn', isLast ? 'Done adding words' : 'Done → pass to next');
   done.addEventListener('click', () => {
     if (isLast) {
-      // Need at least one word to start.
+      // Need at least one word to continue.
       if (distinctWords(state.pool).length === 0) {
         state.gateOpen = true;
         return;
       }
-      startRound();
+      goReady();
     } else {
       state.turn += 1;
       state.gateOpen = false;
@@ -809,6 +870,60 @@ function renderEntry() {
 
   // Guard: if the pool is empty on the last player, show a gentle note.
   if (isLast && distinctWords(state.pool).length === 0) {
+    screen.append(el('p', 'screen__hint', 'Add at least one word to start.'));
+  }
+
+  return screen;
+}
+
+function renderReady() {
+  const screen = el('section', 'screen');
+  screen.append(el('h2', 'screen__title', 'Ready to play'));
+
+  const cat = state.settings.category.trim();
+  if (cat) screen.append(categoryBanner(cat));
+
+  const wordCount = distinctWords(state.pool).length;
+  screen.append(
+    el(
+      'p',
+      'screen__lede',
+      `${wordCount} ${wordCount === 1 ? 'word' : 'words'} in the pool · ` +
+        `${state.playerCount} players.`,
+    ),
+  );
+  screen.append(
+    el(
+      'p',
+      'screen__hint',
+      'Pass the phone around to reveal each player’s secret word.',
+    ),
+  );
+
+  const start = el('button', 'btn', 'Start round');
+  /** @type {HTMLButtonElement} */ (start).disabled = wordCount === 0;
+  start.addEventListener('click', () => startRound());
+  screen.append(start);
+
+  const more = el('button', 'btn btn--ghost', 'Add more words');
+  more.addEventListener('click', () => goEntry());
+  screen.append(more);
+
+  const over = el('button', 'btn btn--ghost', 'Start over');
+  over.addEventListener('click', () => {
+    const ok = window.confirm(
+      'Start over? This clears the word pool (your settings are kept).',
+    );
+    if (!ok) return;
+    state.pool = [];
+    state.recentWords = [];
+    state.round = null;
+    save();
+    goSetup();
+  });
+  screen.append(over);
+
+  if (wordCount === 0) {
     screen.append(el('p', 'screen__hint', 'Add at least one word to start.'));
   }
 
@@ -840,25 +955,10 @@ function renderReveal() {
 
   const assignment = round.assignments[i];
   const cat = state.settings.category.trim();
+  const tapHint = isLast ? 'Tap to hide & start playing' : 'Tap to hide & pass on';
 
-  // One rule covers every case: word != null => "Your word: X" (crew AND
-  // decoy-impostors look identical); word == null => overt impostor.
-  if (assignment && assignment.word != null) {
-    const card = el('section', 'card card--word');
-    if (cat) card.append(el('span', 'card__category', cat));
-    card.append(el('span', 'card__role', 'Your word'));
-    card.append(el('span', 'card__word', assignment.word));
-    screen.append(card);
-  } else {
-    const card = el('section', 'card card--impostor');
-    if (cat) card.append(el('span', 'card__category', cat));
-    card.append(el('span', 'card__role', 'You are the impostor'));
-    card.append(el('span', 'card__note', 'Blend in — don’t get caught.'));
-    screen.append(card);
-  }
-
-  const next = el('button', 'btn', isLast ? 'Hide & start playing' : 'Hide & pass on');
-  next.addEventListener('click', () => {
+  /** Advance the reveal pass-around (the whole card is the tap target). */
+  const advance = () => {
     if (isLast) {
       state.phase = 'play';
       save();
@@ -867,8 +967,27 @@ function renderReveal() {
       state.gateOpen = false;
     }
     render();
-  });
-  screen.append(next);
+  };
+
+  // One rule covers every case: word != null => "Your word: X" (crew AND
+  // decoy-impostors look identical); word == null => overt impostor.
+  if (assignment && assignment.word != null) {
+    const card = el('section', 'card card--word');
+    if (cat) card.append(el('span', 'card__category', cat));
+    card.append(el('span', 'card__role', 'Your word'));
+    card.append(el('span', 'card__word', assignment.word));
+    card.append(el('span', 'card__tap', tapHint));
+    makeTappable(card, advance);
+    screen.append(card);
+  } else {
+    const card = el('section', 'card card--impostor');
+    if (cat) card.append(el('span', 'card__category', cat));
+    card.append(el('span', 'card__role', 'You are the impostor'));
+    card.append(el('span', 'card__note', 'Blend in — don’t get caught.'));
+    card.append(el('span', 'card__tap', tapHint));
+    makeTappable(card, advance);
+    screen.append(card);
+  }
 
   return screen;
 }
@@ -889,8 +1008,8 @@ function renderPlay() {
     el(
       'p',
       'screen__lede',
-      'Going round the circle, each player says one word about their word. ' +
-        'Then discuss and work out who’s faking — if anyone.',
+      'Going round the circle twice, each player says one word. ' +
+        'Then discuss and work out who’s faking.',
     ),
   );
 
@@ -998,6 +1117,9 @@ function render() {
   switch (state.phase) {
     case 'entry':
       screen = renderEntry();
+      break;
+    case 'ready':
+      screen = renderReady();
       break;
     case 'reveal':
       screen = renderReveal();
