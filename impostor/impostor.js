@@ -637,8 +637,7 @@ function renderHome() {
       el(
         'p',
         'screen__lede',
-        `${wordCount} ${wordCount === 1 ? 'word' : 'words'} in the pool · ` +
-          `${state.playerCount} players.`,
+        `${wordCount} ${wordCount === 1 ? 'word' : 'words'} in the pool.`,
       ),
     );
   } else if (firstRun) {
@@ -905,7 +904,7 @@ function renderReveal() {
 
   if (!state.gateOpen) {
     return renderPassGate(
-      `Pass to Player ${i + 1}. Make sure only they can see.`,
+      `Pass to Player ${i + 1}.`,
       'Show my screen',
       () => {
         state.gateOpen = true;
@@ -947,7 +946,6 @@ function renderReveal() {
     const card = el('section', 'card card--impostor');
     if (cat) card.append(el('span', 'card__category', cat));
     card.append(el('span', 'card__role', 'You are the impostor'));
-    card.append(el('span', 'card__note', 'Blend in — don’t get caught.'));
     card.append(el('span', 'card__tap', tapHint));
     makeTappable(card, advance);
     screen.append(card);
@@ -1048,20 +1046,29 @@ function renderResult() {
   }
   screen.append(card);
 
+  // How many words remain (rounds consume them) — always shown so you know
+  // whether there's anything left to Play again with.
+  const left = state.pool.length;
+  screen.append(
+    el(
+      'p',
+      'screen__hint',
+      left === 0
+        ? 'Pool empty — go home to add words.'
+        : `${left} ${left === 1 ? 'word' : 'words'} left in the pool.`,
+    ),
+  );
+
   // Actions: straight into another round (while the pool still has words —
   // rounds consume them), or back to the one Home for everything else.
   const again = el('button', 'btn', 'Play again');
-  /** @type {HTMLButtonElement} */ (again).disabled = state.pool.length === 0;
+  /** @type {HTMLButtonElement} */ (again).disabled = left === 0;
   again.addEventListener('click', () => startRound());
   screen.append(again);
 
   const home = el('button', 'btn btn--ghost', 'Back to home');
   home.addEventListener('click', () => goHome());
   screen.append(home);
-
-  if (state.pool.length === 0) {
-    screen.append(el('p', 'screen__hint', 'Pool empty — go home to add words.'));
-  }
 
   return screen;
 }
