@@ -619,6 +619,12 @@ function renderSetup() {
     ),
   );
 
+  const howto = /** @type {HTMLAnchorElement} */ (
+    el('a', 'screen__howto', 'How to play →')
+  );
+  howto.href = 'how-to-play.html';
+  screen.append(howto);
+
   screen.append(
     stepper('Players', state.playerCount, MIN_PLAYERS, MAX_PLAYERS, (v) => {
       state.playerCount = v;

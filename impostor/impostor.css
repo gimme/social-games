@@ -25,6 +25,19 @@
   font-size: 0.9rem;
 }
 
+.screen__howto {
+  align-self: flex-start;
+  margin-top: calc(-1 * var(--space-2));
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.screen__howto:hover {
+  text-decoration: underline;
+}
+
 /* Fields + steppers */
 .field {
   display: flex;
@@ -375,4 +388,81 @@
   padding-left: var(--space-5);
   text-align: left;
   color: var(--text-muted);
+}
+
+/* How to play — the standalone guide page (how-to-play.html) */
+.guide {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.guide__back {
+  align-self: flex-start;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 0.95rem;
+}
+
+.guide__back:hover {
+  color: var(--text);
+}
+
+.guide__lede {
+  margin: var(--space-3) 0 0;
+  color: var(--text-muted);
+}
+
+.guide__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+}
+
+.guide__h {
+  font-size: 1.15rem;
+}
+
+.guide__note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.guide__list {
+  margin: 0;
+  padding-left: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.guide__list li::marker {
+  color: var(--text-muted);
+}
+
+.guide__defs {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.guide__defs dt {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.guide__defs dd {
+  margin: var(--space-1) 0 0;
+  color: var(--text-muted);
+}
+
+.guide__foot {
+  text-decoration: none;
+  text-align: center;
 }
