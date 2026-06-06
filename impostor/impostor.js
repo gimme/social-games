@@ -10,10 +10,16 @@
  * their screen, then the table gives one-word clues, discusses, and votes — all
  * in person. The app only handles the secret bits.
  *
+ * The pool depletes as you play: every word a round draws — the crew's real word
+ * and any decoys — is removed, so it won't come up again until you add more.
+ * Duplicates are allowed (every entered word counts). Each word remembers who
+ * added it, used for one fairness rule: a round won't hand an impostor the very
+ * word they typed (unless that's all that's left).
+ *
  * Self-contained: this game imports nothing and is the only script on its page.
  *
- * The pure round-building logic (buildRound + its helpers) is DOM-free so it can
- * be exercised by a simulation without a browser.
+ * The pure round-building logic (buildRound) is DOM-free so it can be exercised
+ * by a simulation without a browser.
  */
 
 const MIN_PLAYERS = 3;
@@ -42,6 +48,14 @@ const STORAGE_KEY = 'impostor.v2';
  */
 
 /**
+ * A word in the pool, tagged with who added it.
+ *
+ * @typedef {Object} PoolEntry
+ * @property {string} word   Display (upper-case) form.
+ * @property {number} by     Entry player index that added it; -1 if unknown.
+ */
+
+/**
  * @typedef {Object} Round
  * @property {RoundType} type
  * @property {boolean} decoy                 Did the decoy modifier actually apply.
@@ -52,11 +66,10 @@ const STORAGE_KEY = 'impostor.v2';
 
 /**
  * @typedef {Object} GameState
- * @property {'setup' | 'entry' | 'ready' | 'reveal' | 'play' | 'result'} phase
+ * @property {'home' | 'entry' | 'reveal' | 'play' | 'result'} phase
  * @property {number} playerCount
  * @property {Settings} settings
- * @property {string[]} pool                 Distinct words (display form), shared & shuffled.
- * @property {string[]} recentWords          Recently-chosen real words, most-recent first.
+ * @property {PoolEntry[]} pool              Words (display form), duplicates allowed; consumed as rounds are built.
  * @property {Round | null} round            The current round (during reveal/play/result).
  * @property {number} turn                   0-based player index during a pass-around.
  * @property {boolean} gateOpen              Whether the current player's pass gate is passed.
@@ -108,26 +121,6 @@ function sampleIndices(n, k) {
  */
 function normaliseWord(raw) {
   return raw.trim().replace(/\s+/g, ' ').toLowerCase();
-}
-
-/**
- * Distinct words in the pool (the pool is already kept distinct by entry, but
- * this guards the round logic regardless of how the pool was built).
- *
- * @param {string[]} pool
- * @returns {string[]}
- */
-function distinctWords(pool) {
-  const seen = new Set();
-  const out = [];
-  for (const w of pool) {
-    const key = normaliseWord(w);
-    if (!seen.has(key)) {
-      seen.add(key);
-      out.push(w);
-    }
-  }
-  return out;
 }
 
 /**
@@ -195,79 +188,68 @@ function impostorCountForType(type, n) {
 }
 
 /**
- * Pick a real word, preferring ones not used recently (soft window).
+ * Build a round. Pure: no DOM, no global state.
  *
- * 1. fresh = distinct(pool) − recentWords; pick uniformly from fresh if any,
- * 2. else pick uniformly from the whole distinct pool (graceful fallback).
+ * Words are CONSUMED: every word drawn (the crew's real word and any decoys) is
+ * removed from the working pool, which is returned so the caller can persist the
+ * depleted pool. Duplicates are allowed; a draw removes one instance by index.
  *
- * @param {string[]} pool
- * @param {string[]} recentWords
- * @returns {string}
- */
-function pickWord(pool, recentWords) {
-  const distinct = distinctWords(pool);
-  const recentKeys = new Set(recentWords.map(normaliseWord));
-  const fresh = distinct.filter((w) => !recentKeys.has(normaliseWord(w)));
-  const source = fresh.length > 0 ? fresh : distinct;
-  return source[randInt(source.length)];
-}
-
-/**
- * Prepend a freshly-used real word to recentWords and trim to the soft window
- * length floor(distinctPoolSize / 2). Mutates and returns the array.
- *
- * @param {string[]} recentWords
- * @param {string} word
- * @param {number} distinctPoolSize
- * @returns {string[]}
- */
-function rememberWord(recentWords, word, distinctPoolSize) {
-  const key = normaliseWord(word);
-  // Keep most-recent-first, no duplicates.
-  const next = [word, ...recentWords.filter((w) => normaliseWord(w) !== key)];
-  const windowLen = Math.floor(distinctPoolSize / 2);
-  next.length = Math.min(next.length, windowLen);
-  return next;
-}
-
-/**
- * Build a round. Pure: no DOM, no global state. Mutates `recentWords` only via
- * the returned value (caller assigns it back).
- *
- * Picks (impostors and word) are uniform and INDEPENDENT — no contributor
- * tracking anywhere.
+ * Two fairness rules:
+ *  - The real word is never one an impostor in THIS round contributed — unless
+ *    the only words left are theirs (graceful fallback).
+ *  - A decoy is never the same word as the real word (hard constraint), and
+ *    differs from other decoys when the pool allows.
  *
  * @param {number} n
- * @param {string[]} pool
+ * @param {PoolEntry[]} pool
  * @param {Settings} settings
- * @param {string[]} recentWords
- * @returns {{ round: Round, recentWords: string[] }}
+ * @returns {{ round: Round, pool: PoolEntry[] }}
  */
-function buildRound(n, pool, settings, recentWords) {
-  const distinct = distinctWords(pool);
+function buildRound(n, pool, settings) {
+  const work = pool.slice();
+  const key = /** @param {PoolEntry} e */ (e) => normaliseWord(e.word);
+
   const type = rollType(settings, n);
   const impostorCount = impostorCountForType(type, n);
   const impostorSet = new Set(sampleIndices(n, impostorCount));
-
   const hasCrew = impostorCount < n;
-  const realWord = hasCrew ? pickWord(pool, recentWords) : null;
 
-  // The decoy modifier rolls independently and only matters when there is at
-  // least one impostor to hand a decoy to.
-  let decoy = impostorCount > 0 && roll(settings.decoyPct);
-
-  // Pool guard: need enough DISTINCT words for unique decoys (+ the real word).
-  const needed = impostorCount + (realWord ? 1 : 0);
-  if (decoy && distinct.length < needed) {
-    decoy = false; // graceful fallback to an overt round
+  // Real word: prefer words NOT contributed by an impostor this round; fall back
+  // to the whole pool only if every remaining word is an impostor's.
+  /** @type {string | null} */
+  let realWord = null;
+  if (hasCrew && work.length > 0) {
+    const crewIdx = [];
+    for (let i = 0; i < work.length; i++) {
+      if (!impostorSet.has(work[i].by)) crewIdx.push(i);
+    }
+    const pickFrom = crewIdx.length > 0 ? crewIdx : work.map((_, i) => i);
+    const drawIdx = pickFrom[randInt(pickFrom.length)];
+    realWord = work.splice(drawIdx, 1)[0].word;
   }
-
-  // Throwaway decoy words: distinct pool minus the real word, shuffled. Decoys
-  // do NOT respect the recently-used window.
   const realKey = realWord != null ? normaliseWord(realWord) : null;
-  const decoyBag = decoy
-    ? shuffle(distinct.filter((w) => normaliseWord(w) !== realKey))
-    : [];
+
+  // Decoy modifier: only with an impostor to hand one to, and only if there are
+  // enough words that DIFFER from the real word to give each impostor a distinct
+  // one. Otherwise fall back to an overt round.
+  let decoy = impostorCount > 0 && roll(settings.decoyPct);
+  const diffCount = work.filter((e) => realKey == null || key(e) !== realKey).length;
+  if (decoy && diffCount < impostorCount) decoy = false;
+
+  /** Draw a decoy != real word, preferring text not yet used this round. */
+  const usedDecoyKeys = new Set();
+  const drawDecoy = () => {
+    const candidates = [];
+    for (let i = 0; i < work.length; i++) {
+      if (realKey == null || key(work[i]) !== realKey) candidates.push(i);
+    }
+    const fresh = candidates.filter((i) => !usedDecoyKeys.has(key(work[i])));
+    const pickFrom = fresh.length > 0 ? fresh : candidates;
+    const drawIdx = pickFrom[randInt(pickFrom.length)];
+    const entry = work.splice(drawIdx, 1)[0];
+    usedDecoyKeys.add(normaliseWord(entry.word));
+    return entry.word;
+  };
 
   /** @type {Assignment[]} */
   const assignments = [];
@@ -275,8 +257,7 @@ function buildRound(n, pool, settings, recentWords) {
     if (!impostorSet.has(p)) {
       assignments.push({ word: realWord, impostor: false });
     } else if (decoy) {
-      const decoyWord = decoyBag.pop();
-      assignments.push({ word: decoyWord ?? null, impostor: true });
+      assignments.push({ word: drawDecoy(), impostor: true });
     } else {
       assignments.push({ word: null, impostor: true });
     }
@@ -284,14 +265,9 @@ function buildRound(n, pool, settings, recentWords) {
 
   const starter = randInt(n);
 
-  let nextRecent = recentWords;
-  if (realWord != null) {
-    nextRecent = rememberWord(recentWords, realWord, distinct.length);
-  }
-
   return {
     round: { type, decoy, realWord, starter, assignments },
-    recentWords: nextRecent,
+    pool: work,
   };
 }
 
@@ -308,11 +284,10 @@ function defaultSettings() {
 
 /** @type {GameState} */
 const state = {
-  phase: 'setup',
+  phase: 'home',
   playerCount: DEFAULT_PLAYERS,
   settings: defaultSettings(),
   pool: [],
-  recentWords: [],
   round: null,
   turn: 0,
   gateOpen: false,
@@ -334,7 +309,6 @@ function save() {
       playerCount: state.playerCount,
       settings: state.settings,
       pool: state.pool,
-      recentWords: state.recentWords,
       round: state.round,
       turn: state.turn,
     };
@@ -371,18 +345,20 @@ function load() {
       };
     }
     if (Array.isArray(data.pool)) {
-      state.pool = data.pool
-        .filter(
-          /** @param {unknown} w @returns {w is string} */ (w) => typeof w === 'string',
-        )
-        .map(/** @param {string} w */ (w) => w.toUpperCase());
-    }
-    if (Array.isArray(data.recentWords)) {
-      state.recentWords = data.recentWords
-        .filter(
-          /** @param {unknown} w @returns {w is string} */ (w) => typeof w === 'string',
-        )
-        .map(/** @param {string} w */ (w) => w.toUpperCase());
+      /** @type {PoolEntry[]} */
+      const pool = [];
+      for (const item of data.pool) {
+        // New shape: { word, by }. Legacy shape: a bare string (no contributor).
+        if (typeof item === 'string') {
+          pool.push({ word: item.toUpperCase(), by: -1 });
+        } else if (item && typeof item === 'object' && typeof item.word === 'string') {
+          pool.push({
+            word: item.word.toUpperCase(),
+            by: Number.isInteger(item.by) ? item.by : -1,
+          });
+        }
+      }
+      state.pool = pool;
     }
     if (data.round && typeof data.round === 'object') {
       // Legacy rounds may hold mixed-case words; present them in caps too.
@@ -398,19 +374,14 @@ function load() {
 
     const phase = data.phase;
     if (phase === 'reveal' || phase === 'play' || phase === 'result') {
-      // Only restore an in-progress round if we actually have its data;
-      // otherwise fall back to the ready lobby (or setup) using the pool.
-      if (state.round) {
-        state.phase = phase;
-      } else {
-        state.phase = state.pool.length > 0 ? 'ready' : 'setup';
-      }
+      // Only restore an in-progress round (reveal/play) or its reveal (result)
+      // if we actually have the round data; otherwise fall back to Home.
+      state.phase = state.round ? phase : 'home';
     } else if (phase === 'entry') {
       state.phase = 'entry';
-    } else if (phase === 'ready') {
-      state.phase = state.pool.length > 0 ? 'ready' : 'setup';
     } else {
-      state.phase = 'setup';
+      // Legacy 'setup'/'ready' and the new 'home' all land on Home.
+      state.phase = 'home';
     }
 
     // Always reset any pass-around to a safe pass-gate and clear transient
@@ -565,13 +536,13 @@ function categoryBanner(text, className) {
 
 // --- phase transitions -----------------------------------------------------
 
-/** Go to setup. */
-function goSetup() {
-  state.phase = 'setup';
+/** Go to the one Home screen (settings + pool + actions). */
+function goHome() {
+  state.phase = 'home';
   render();
 }
 
-/** Begin the entry pass-around (append mode if the pool already has words). */
+/** Begin the entry pass-around (always append mode — never resets the pool). */
 function goEntry() {
   state.phase = 'entry';
   state.turn = 0;
@@ -580,23 +551,15 @@ function goEntry() {
   render();
 }
 
-/** The lobby between entering words and revealing roles: play / add more / start over. */
-function goReady() {
-  state.phase = 'ready';
-  render();
-}
-
-/** Build a round from the current pool and start the reveal pass-around. */
+/**
+ * Build a round from the current pool and start the reveal pass-around. The
+ * round consumes words, so the depleted pool is written back to state.
+ */
 function startRound() {
-  if (distinctWords(state.pool).length === 0) return;
-  const { round, recentWords } = buildRound(
-    state.playerCount,
-    state.pool,
-    state.settings,
-    state.recentWords,
-  );
+  if (state.pool.length === 0) return;
+  const { round, pool } = buildRound(state.playerCount, state.pool, state.settings);
   state.round = round;
-  state.recentWords = recentWords;
+  state.pool = pool;
   state.phase = 'reveal';
   state.turn = 0;
   state.gateOpen = false;
@@ -605,25 +568,39 @@ function startRound() {
 
 // --- screens ---------------------------------------------------------------
 
-function renderSetup() {
+/**
+ * The one Home screen: settings, pool status, and actions. It merges what used
+ * to be three near-identical screens (setup / ready lobby / post-round lobby).
+ * Settings stay editable here between rounds without ever losing the pool.
+ */
+function renderHome() {
   const screen = el('section', 'screen');
+  const wordCount = state.pool.length;
+  const hasWords = wordCount > 0;
+  // A brand-new pool that has never been played gets the full welcome; once
+  // there are words (or a round has happened) Home stays uncluttered.
+  const firstRun = !hasWords && state.round === null;
+
   screen.append(el('h1', 'screen__title', 'Impostor'));
-  screen.append(
-    el(
-      'p',
-      'screen__lede',
-      'Everyone secretly types words into one shared pool. Then the app hands ' +
-        'out the same secret word to all — except the impostor. Pass the phone ' +
-        'around, give one-word clues (2 each), and work out who is faking. But ' +
-        'be careful — if the impostor guesses the word, they win!',
-    ),
-  );
 
   const howto = /** @type {HTMLAnchorElement} */ (
     el('a', 'screen__howto', 'How to play →')
   );
   howto.href = 'how-to-play.html';
   screen.append(howto);
+
+  if (firstRun) {
+    screen.append(
+      el(
+        'p',
+        'screen__lede',
+        'Everyone secretly types words into one shared pool. Then the app hands ' +
+          'out the same secret word to all — except the impostor. Pass the phone ' +
+          'around, give one-word clues (2 each), and work out who is faking. But ' +
+          'be careful — if the impostor guesses the word, they win!',
+      ),
+    );
+  }
 
   screen.append(
     stepper('Players', state.playerCount, MIN_PLAYERS, MAX_PLAYERS, (v) => {
@@ -632,13 +609,18 @@ function renderSetup() {
     }),
   );
 
-  // Category (optional).
+  // Category — locked to the theme the words were entered under once the pool
+  // holds anything; editable again only when the pool is empty.
   const catField = el('label', 'field field--input');
-  catField.append(el('span', 'field__label', 'Category'));
+  const catLabel = el('div', 'field__labelwrap');
+  catLabel.append(el('span', 'field__label', 'Category'));
+  if (hasWords) catLabel.append(el('span', 'field__note', 'Clear words to change'));
+  catField.append(catLabel);
   const catInput = /** @type {HTMLInputElement} */ (el('input', 'field__input'));
   catInput.type = 'text';
   catInput.placeholder = 'Optional theme (e.g. Movies)';
   catInput.value = state.settings.category;
+  catInput.disabled = hasWords;
   catInput.addEventListener('input', () => {
     state.settings.category = catInput.value;
     save();
@@ -649,25 +631,54 @@ function renderSetup() {
   // Advanced settings (collapsible).
   screen.append(renderAdvanced());
 
-  screen.append(
-    el(
-      'p',
-      'screen__hint',
-      'Pick a category everyone here knows well, and enter words you’d ' +
-        'expect the others to recognise.',
-    ),
-  );
+  // Pool status (or, on a fresh pool, a one-line tip).
+  if (hasWords) {
+    screen.append(
+      el(
+        'p',
+        'screen__lede',
+        `${wordCount} ${wordCount === 1 ? 'word' : 'words'} in the pool · ` +
+          `${state.playerCount} players.`,
+      ),
+    );
+  } else if (firstRun) {
+    screen.append(
+      el(
+        'p',
+        'screen__hint',
+        'Pick a category everyone here knows well, then add words you’d ' +
+          'expect the others to recognise.',
+      ),
+    );
+  } else {
+    screen.append(el('p', 'screen__lede', 'No words in the pool yet.'));
+  }
 
-  const start = el('button', 'btn', 'Start → enter words');
-  start.addEventListener('click', () => {
-    // Fresh game from setup: start the pool from scratch.
-    state.pool = [];
-    state.recentWords = [];
-    state.round = null;
-    save();
-    goEntry();
-  });
+  const start = el('button', 'btn', 'Start round');
+  /** @type {HTMLButtonElement} */ (start).disabled = !hasWords;
+  start.addEventListener('click', () => startRound());
   screen.append(start);
+
+  const add = el('button', 'btn btn--ghost', 'Add words');
+  add.addEventListener('click', () => goEntry());
+  screen.append(add);
+
+  if (hasWords) {
+    const clear = el('button', 'btn btn--ghost', 'Clear words');
+    clear.addEventListener('click', () => {
+      const ok = window.confirm(
+        'Clear the word pool? Your settings (players, category, odds) are kept.',
+      );
+      if (!ok) return;
+      state.pool = [];
+      state.round = null;
+      save();
+      render();
+    });
+    screen.append(clear);
+  } else {
+    screen.append(el('p', 'screen__hint', 'Add words to start.'));
+  }
 
   return screen;
 }
@@ -823,27 +834,23 @@ function renderEntry() {
     });
   };
 
-  /** Add the current input to the draft + pool (de-duped). */
+  /** Add the current input to this turn's draft (committed to the pool on Done). */
   const addWord = () => {
     const raw = input.value;
     const norm = normaliseWord(raw);
     input.value = '';
     input.focus();
     if (!norm) return;
-    const poolKeys = new Set(state.pool.map(normaliseWord));
+    // Reject only an exact duplicate within this player's OWN draft (so a
+    // double-tap doesn't bloat their chips). Duplicates across players are kept —
+    // every word entered ends up in the pool.
     const draftKeys = new Set(state.draftWords.map(normaliseWord));
-    // A player's duplicate of their own word (or one already in the pool) is
-    // ignored.
     if (draftKeys.has(norm)) return;
     // Trim, collapse inner whitespace, and upper-case the whole word — a final
     // safety net on top of the live per-keystroke upper-casing, so casing never
     // causes confusion no matter how the text got into the box.
     const display = raw.trim().replace(/\s+/g, ' ').toUpperCase();
     state.draftWords.push(display);
-    if (!poolKeys.has(norm)) {
-      state.pool.push(display);
-      save();
-    }
     renderChips();
   };
 
@@ -858,78 +865,29 @@ function renderEntry() {
 
   const done = el('button', 'btn', isLast ? 'Done adding words' : 'Done → pass to next');
   done.addEventListener('click', () => {
+    // The last player must leave at least one word in the pool (counting this
+    // turn's not-yet-committed draft).
+    if (isLast && state.pool.length + state.draftWords.length === 0) return;
+
+    // Commit this turn's words to the shared pool, tagged with who added them,
+    // then move on. (Committing on Done — not per keystroke — keeps the chips and
+    // the pool in sync, so removing a chip really removes the word.)
+    const by = state.turn;
+    for (const w of state.draftWords) state.pool.push({ word: w, by });
+    state.draftWords = [];
+
     if (isLast) {
-      // Need at least one word to continue.
-      if (distinctWords(state.pool).length === 0) {
-        state.gateOpen = true;
-        return;
-      }
-      goReady();
+      goHome();
     } else {
       state.turn += 1;
       state.gateOpen = false;
-      state.draftWords = [];
       render();
     }
   });
   screen.append(done);
 
-  // Guard: if the pool is empty on the last player, show a gentle note.
-  if (isLast && distinctWords(state.pool).length === 0) {
-    screen.append(el('p', 'screen__hint', 'Add at least one word to start.'));
-  }
-
-  return screen;
-}
-
-function renderReady() {
-  const screen = el('section', 'screen');
-  screen.append(el('h2', 'screen__title', 'Ready to play'));
-
-  const cat = state.settings.category.trim();
-  if (cat) screen.append(categoryBanner(cat));
-
-  const wordCount = distinctWords(state.pool).length;
-  screen.append(
-    el(
-      'p',
-      'screen__lede',
-      `${wordCount} ${wordCount === 1 ? 'word' : 'words'} in the pool · ` +
-        `${state.playerCount} players.`,
-    ),
-  );
-  screen.append(
-    el(
-      'p',
-      'screen__hint',
-      'Pass the phone around to reveal each player’s secret word.',
-    ),
-  );
-
-  const start = el('button', 'btn', 'Start round');
-  /** @type {HTMLButtonElement} */ (start).disabled = wordCount === 0;
-  start.addEventListener('click', () => startRound());
-  screen.append(start);
-
-  const more = el('button', 'btn btn--ghost', 'Add more words');
-  more.addEventListener('click', () => goEntry());
-  screen.append(more);
-
-  const over = el('button', 'btn btn--ghost', 'Start over');
-  over.addEventListener('click', () => {
-    const ok = window.confirm(
-      'Start over? This clears the word pool (your settings are kept).',
-    );
-    if (!ok) return;
-    state.pool = [];
-    state.recentWords = [];
-    state.round = null;
-    save();
-    goSetup();
-  });
-  screen.append(over);
-
-  if (wordCount === 0) {
+  // Guard: nothing anywhere yet on the last player — show a gentle note.
+  if (isLast && state.pool.length === 0 && state.draftWords.length === 0) {
     screen.append(el('p', 'screen__hint', 'Add at least one word to start.'));
   }
 
@@ -939,8 +897,8 @@ function renderReady() {
 function renderReveal() {
   const round = state.round;
   if (!round) {
-    state.phase = 'setup';
-    return renderSetup();
+    state.phase = 'home';
+    return renderHome();
   }
   const i = state.turn;
   const isLast = i >= state.playerCount - 1;
@@ -1001,8 +959,8 @@ function renderReveal() {
 function renderPlay() {
   const round = state.round;
   if (!round) {
-    state.phase = 'setup';
-    return renderSetup();
+    state.phase = 'home';
+    return renderHome();
   }
   const screen = el('section', 'screen');
   screen.append(el('h2', 'screen__title', 'Play it out'));
@@ -1037,8 +995,8 @@ function renderPlay() {
 function renderResult() {
   const round = state.round;
   if (!round) {
-    state.phase = 'setup';
-    return renderSetup();
+    state.phase = 'home';
+    return renderHome();
   }
   const screen = el('section', 'screen');
   screen.append(el('h2', 'screen__title', 'The reveal'));
@@ -1090,28 +1048,20 @@ function renderResult() {
   }
   screen.append(card);
 
-  // Actions.
-  const again = el('button', 'btn', 'Play again — same words');
+  // Actions: straight into another round (while the pool still has words —
+  // rounds consume them), or back to the one Home for everything else.
+  const again = el('button', 'btn', 'Play again');
+  /** @type {HTMLButtonElement} */ (again).disabled = state.pool.length === 0;
   again.addEventListener('click', () => startRound());
   screen.append(again);
 
-  const more = el('button', 'btn btn--ghost', 'Add more words');
-  more.addEventListener('click', () => goEntry());
-  screen.append(more);
+  const home = el('button', 'btn btn--ghost', 'Back to home');
+  home.addEventListener('click', () => goHome());
+  screen.append(home);
 
-  const newGame = el('button', 'btn btn--ghost', 'New game');
-  newGame.addEventListener('click', () => {
-    const ok = window.confirm(
-      'Start a new game? This clears the word pool (your settings are kept).',
-    );
-    if (!ok) return;
-    state.pool = [];
-    state.recentWords = [];
-    state.round = null;
-    save();
-    goSetup();
-  });
-  screen.append(newGame);
+  if (state.pool.length === 0) {
+    screen.append(el('p', 'screen__hint', 'Pool empty — go home to add words.'));
+  }
 
   return screen;
 }
@@ -1124,9 +1074,6 @@ function render() {
     case 'entry':
       screen = renderEntry();
       break;
-    case 'ready':
-      screen = renderReady();
-      break;
     case 'reveal':
       screen = renderReveal();
       break;
@@ -1136,9 +1083,9 @@ function render() {
     case 'result':
       screen = renderResult();
       break;
-    case 'setup':
+    case 'home':
     default:
-      screen = renderSetup();
+      screen = renderHome();
       break;
   }
   app.replaceChildren(screen);
@@ -1149,13 +1096,4 @@ load();
 render();
 
 // Exported for the headless simulation/tests. Harmless in the browser.
-export {
-  buildRound,
-  pickWord,
-  rememberWord,
-  rollType,
-  impostorCountForType,
-  normalPct,
-  normaliseWord,
-  distinctWords,
-};
+export { buildRound, rollType, impostorCountForType, normalPct };
