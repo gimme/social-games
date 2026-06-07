@@ -187,7 +187,7 @@ export const games = [
     name: '12345678 Rhythm',
     tagline: 'Count to 8 and back in rhythm, dropping a number each pass.',
     emoji: '🥁',
-    players: '3+ players',
+    players: '1+ players',
     path: 'rhythm-12345678/',
   },
 ];
