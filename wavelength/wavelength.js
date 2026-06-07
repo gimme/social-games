@@ -518,8 +518,22 @@ function buildDial(opts) {
 
   // Dial body: a smooth, blank half-disc. No tick marks are drawn — the surface
   // looks like a continuous scale, but the needle still snaps (and buzzes) onto
-  // one of the 21 marks, so the accuracy is felt rather than seen.
-  svg.append(svgEl('path', { d: sector(0, 100), class: 'dial__bg' }));
+  // one of the 21 marks, so the accuracy is felt rather than seen. The face is
+  // white while the target wedge is on show; when it's hidden the fill becomes a
+  // light-blue "shield", standing in for the physical screen flipped down over
+  // the answer.
+  if (!opts.showWedge) {
+    // Frosted light-blue shield gradient — lighter at the top, as if a curved
+    // plastic cover were catching the light.
+    const defs = svgEl('defs');
+    const grad = svgEl('linearGradient', { id: 'shield', x1: 0, y1: 0, x2: 0, y2: 1 });
+    grad.append(svgEl('stop', { offset: '0%', 'stop-color': '#dbe7fc' }));
+    grad.append(svgEl('stop', { offset: '100%', 'stop-color': '#a7c3ef' }));
+    defs.append(grad);
+    svg.append(defs);
+  }
+  const bgClass = opts.showWedge ? 'dial__bg' : 'dial__bg dial__bg--covered';
+  svg.append(svgEl('path', { d: sector(0, 100), class: bgClass }));
 
   // Target wedge: five pie slices fanning from the centre, point value on each.
   if (opts.showWedge) {

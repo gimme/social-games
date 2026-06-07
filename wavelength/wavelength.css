@@ -150,35 +150,26 @@
   stroke: var(--accent);
 }
 
-/* Smooth white half-disc — no ticks drawn, so the scale reads as continuous.
-   A chunky bezel (drawn under the fill via paint-order, so only its outer half
-   shows) frames the wheel, and a drop shadow lifts it off the page. */
+/* The dial face doubles as the device's sliding shield, so no ticks are drawn
+   and the scale reads as a continuous surface. A chunky dark-blue bezel (drawn
+   under the fill via paint-order, so only its outer half shows) frames the wheel
+   in both states, and a drop shadow lifts it off the page. The fill is white
+   while the target wedge is on show; when the answer is hidden it switches to
+   the light-blue shield below. */
 .dial__bg {
   fill: #fff;
-  stroke: #c3cbe6;
+  stroke: #22305f;
   stroke-width: 12;
   paint-order: stroke;
   stroke-linejoin: round;
   filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.5));
 }
 
-.dial__wedge {
-  animation: wedge-in 0.45s ease both;
-}
-
-@keyframes wedge-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .dial__wedge {
-    animation: none;
-  }
+/* Covered (answer hidden): a frosted light-blue panel over the dial face, like
+   the physical screen flipped down to hide the target — so a covered target
+   reads as screened-off rather than a blank white dial. */
+.dial__bg--covered {
+  fill: url(#shield);
 }
 
 /* Target wedge colours, matching the physical game: 4 = blue, 3 = red, 2 =
