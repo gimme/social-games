@@ -213,15 +213,15 @@ function scoreLabel(pts) {
 }
 
 /**
- * A random target centre, sitting on a mark and kept far enough from the ends
- * that the whole wedge always fits on the dial.
+ * A random target centre, sitting on any mark across the whole dial — the ends
+ * included. A target near a corner pushes part of its wedge off the dial, so
+ * that low-scoring side simply isn't reachable this round; the bullseye itself
+ * can sit right in the corner.
  *
- * @returns {number} A mark position in [BAND_2, 100 − BAND_2].
+ * @returns {number} A mark position in [0, 100].
  */
 function randTarget() {
-  const minTick = Math.ceil(BAND_2 / TICK_STEP); // 3 — leaves room for the wedge
-  const maxTick = TICKS - 1 - minTick; // 17
-  return (minTick + randInt(maxTick - minTick + 1)) * TICK_STEP;
+  return randInt(TICKS) * TICK_STEP;
 }
 
 /** @param {number} i @returns {string} A stable colour for team index i. */
@@ -547,8 +547,14 @@ function buildDial(opts) {
       [t + BAND_4, t + BAND_3, 'b3'],
       [t + BAND_3, t + BAND_2, 'b2'],
     ];
+    // A target near a corner runs part of its wedge off the dial: clip each band
+    // to [0, 100] and drop any that lands entirely outside, so nothing spills
+    // past the rim.
     for (const [a, b, cls] of bands) {
-      g.append(svgEl('path', { d: sector(a, b), class: `dial__band dial__band--${cls}` }));
+      const lo = Math.max(0, a);
+      const hi = Math.min(100, b);
+      if (hi <= lo) continue;
+      g.append(svgEl('path', { d: sector(lo, hi), class: `dial__band dial__band--${cls}` }));
     }
     const lr = R * 0.9; // sit the point numbers right out near the rim
     /** @type {[number, string][]} */
@@ -560,6 +566,7 @@ function buildDial(opts) {
       [t + 10, '2'],
     ];
     for (const [p, txt] of labels) {
+      if (p < 0 || p > 100) continue; // its band ran off the dial — no number to show
       const c = ptAt(p, lr);
       const tn = svgEl('text', { x: f(c.x), y: f(c.y), class: 'dial__pts' });
       tn.textContent = txt;
