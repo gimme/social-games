@@ -1,0 +1,553 @@
+.game {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-4) var(--space-8);
+}
+
+.screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+/* Dial-centred screens are built from three groups (see playScreen()): a head
+   above the wheel, the stage (wheel + spectrum), and a foot below. Portrait
+   just stacks them; landscape (further down) reflows to a big wheel + a compact
+   side column. */
+.screen__head,
+.screen__foot {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.screen__stage {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.screen__stage .dial__svg {
+  margin: 0;
+}
+
+/* Landscape: hand the whole viewport to the wheel, with the controls stacked
+   beside it. The wheel caps its width so its (fixed-ratio) height always fits
+   the screen, and the controls beside it scroll only if they overrun the short
+   viewport; the wheel's box still matches the viewBox, which keeps needle
+   dragging accurate. Side padding clears any notch via the safe-area insets. */
+@media (orientation: landscape) {
+  .game:has(.screen--play) {
+    max-width: none;
+    height: 100dvh;
+    padding: var(--space-3) max(var(--space-4), env(safe-area-inset-right))
+      var(--space-3) max(var(--space-4), env(safe-area-inset-left));
+    overflow: hidden;
+  }
+
+  .screen--play {
+    height: 100%;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(11rem, 16rem);
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas:
+      'stage head'
+      'stage foot';
+    column-gap: var(--space-5);
+  }
+
+  .screen--play .screen__head {
+    grid-area: head;
+  }
+
+  /* The controls fill the column under the head and scroll within it if they're
+     taller than the viewport — so on the reveal the result card + scoreboard +
+     both buttons stay reachable instead of being clipped off the bottom. They
+     centre vertically when they fit (safe-center falls back to the top so a tall
+     stack never has its first item scrolled out of reach). */
+  .screen--play .screen__foot {
+    grid-area: foot;
+    min-height: 0;
+    overflow-y: auto;
+    justify-content: safe center;
+  }
+
+  .screen--play .screen__stage {
+    grid-area: stage;
+    justify-content: center;
+    align-items: center;
+    min-height: 0;
+  }
+
+  .screen--play .screen__stage .dial__svg,
+  .screen--play .screen__stage .spectrum {
+    width: 100%;
+    max-width: calc((100dvh - 5.5rem) * 1.66);
+  }
+}
+
+.screen__title {
+  font-size: 1.9rem;
+}
+
+.screen__lede {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.screen__hint {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.screen__howto {
+  align-self: flex-start;
+  margin-top: calc(-1 * var(--space-2));
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.screen__howto:hover {
+  text-decoration: underline;
+}
+
+/* Fields + steppers */
+.field {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+}
+
+.field__labelwrap {
+  display: flex;
+  flex-direction: column;
+}
+
+.field__label {
+  font-weight: 600;
+}
+
+.field__note {
+  color: var(--text-muted);
+  font-size: 0.8rem;
+}
+
+.stepper {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.stepper__btn {
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  background: var(--bg-elevated);
+  color: var(--text);
+  font-size: 1.4rem;
+  line-height: 1;
+}
+
+.stepper__btn:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.stepper__value {
+  min-width: 3ch;
+  text-align: center;
+  font-size: 1.25rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Turn pill */
+.pill {
+  align-self: center;
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  color: var(--accent);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+/* Pass gate (reused card pattern) */
+.card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  min-height: 14rem;
+  padding: var(--space-6) var(--space-5);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  box-shadow: var(--shadow);
+  text-align: center;
+}
+
+.card--tap {
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  transition: transform 0.04s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.card--tap:hover {
+  border-color: var(--accent);
+}
+
+.card--tap:active {
+  transform: translateY(1px);
+}
+
+.card--tap:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.card--gate {
+  border-style: dashed;
+  border-color: var(--accent);
+  background: linear-gradient(180deg, var(--bg-elevated), var(--bg-card));
+}
+
+.card__hint {
+  color: var(--text-muted);
+  font-size: 1.05rem;
+}
+
+.card__action {
+  color: var(--accent);
+  font-size: 1.4rem;
+  font-weight: 700;
+}
+
+/* The dial */
+.dial__svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  margin: var(--space-2) 0 0;
+  overflow: visible;
+}
+
+.dial__svg--interactive {
+  touch-action: none;
+  cursor: grab;
+}
+
+.dial__svg--interactive:active {
+  cursor: grabbing;
+}
+
+.dial__svg--interactive:focus-visible {
+  outline: none;
+}
+
+.dial__svg--interactive:focus-visible .dial__hub {
+  stroke: var(--accent);
+  stroke-width: 4;
+}
+
+/* Smooth white half-disc — no ticks drawn, so the scale reads as continuous.
+   A chunky bezel (drawn under the fill via paint-order, so only its outer half
+   shows) frames the wheel, and a drop shadow lifts it off the page. */
+.dial__bg {
+  fill: #fff;
+  stroke: #c3cbe6;
+  stroke-width: 12;
+  paint-order: stroke;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 8px 18px rgba(0, 0, 0, 0.5));
+}
+
+.dial__wedge {
+  animation: wedge-in 0.45s ease both;
+}
+
+@keyframes wedge-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dial__wedge {
+    animation: none;
+  }
+}
+
+/* Target wedge colours, matching the physical game: 4 = blue, 3 = red, 2 =
+   orange (slices run 2-3-4-3-2 out from the centre). */
+.dial__band--b4 {
+  fill: #4d86ff;
+}
+
+.dial__band--b3 {
+  fill: #ff4d4f;
+}
+
+.dial__band--b2 {
+  fill: #ff9636;
+}
+
+.dial__pts {
+  fill: #000;
+  font-size: 13px;
+  font-weight: 800;
+  text-anchor: middle;
+  dominant-baseline: central;
+}
+
+.dial__needle {
+  transition: transform 0.06s ease-out;
+}
+
+.dial__needle-line {
+  stroke: #c8283c;
+  stroke-width: 4;
+  stroke-linecap: round;
+}
+
+.dial__hub {
+  fill: #c8283c;
+  stroke: #fff;
+  stroke-width: 3;
+}
+
+/* Spectrum ends */
+.spectrum {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: calc(-1 * var(--space-2));
+}
+
+.spectrum__end {
+  flex: 1;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.spectrum__end--left {
+  text-align: left;
+}
+
+.spectrum__end--right {
+  text-align: right;
+}
+
+.spectrum__arrow {
+  color: var(--text-muted);
+  font-size: 1.1rem;
+}
+
+/* Scoreboard */
+.scoreboard {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: center;
+}
+
+.scoreboard--solo {
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.scoreboard__solo {
+  font-size: 1.3rem;
+  font-weight: 800;
+}
+
+.scoreboard__meta {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.team-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-card);
+}
+
+.team-chip--active {
+  border-color: var(--text);
+  background: var(--bg-elevated);
+}
+
+.team-chip__dot {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+}
+
+.team-chip__name {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.team-chip--active .team-chip__name {
+  color: var(--text);
+}
+
+.team-chip__score {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Result */
+.result {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-1);
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  text-align: center;
+}
+
+/* Score banner tints track the wedge: 4 = blue, 3 = red, 2 = orange. */
+.result--p4 {
+  border-color: #4d86ff;
+  background: linear-gradient(180deg, rgba(77, 134, 255, 0.18), var(--bg-card));
+}
+
+.result--p3 {
+  border-color: #ff4d4f;
+  background: linear-gradient(180deg, rgba(255, 77, 79, 0.14), var(--bg-card));
+}
+
+.result--p2 {
+  border-color: #ff9636;
+  background: linear-gradient(180deg, rgba(255, 150, 54, 0.14), var(--bg-card));
+}
+
+.result--p0 {
+  border-color: var(--border);
+}
+
+.result__pts {
+  font-size: 2.6rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.result__label {
+  font-size: 1.2rem;
+  font-weight: 700;
+}
+
+.result__who {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+/* How to play — the standalone guide page (how-to-play.html) */
+.guide {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.guide__back {
+  align-self: flex-start;
+  color: var(--text-muted);
+  text-decoration: none;
+  font-size: 0.95rem;
+}
+
+.guide__back:hover {
+  color: var(--text);
+}
+
+.guide__lede {
+  margin: var(--space-3) 0 0;
+  color: var(--text-muted);
+}
+
+.guide__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+}
+
+.guide__h {
+  font-size: 1.15rem;
+}
+
+.guide__note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.guide__list {
+  margin: 0;
+  padding-left: var(--space-5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.guide__list li::marker {
+  color: var(--text-muted);
+}
+
+.guide__defs {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.guide__defs dt {
+  font-weight: 700;
+  color: var(--accent);
+}
+
+.guide__defs dd {
+  margin: var(--space-1) 0 0;
+  color: var(--text-muted);
+}
+
+.guide__foot {
+  text-decoration: none;
+  text-align: center;
+}

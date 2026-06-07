@@ -3,69 +3,23 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <title>How to play — Wavelength</title>
-    <meta name="description" content="How to play Wavelength — a pass-the-phone party game." />
-    <link rel="icon" href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Ctext%20y='.9em'%20font-size='90'%3E🎚️%3C/text%3E%3C/svg%3E" />
+    <link rel="manifest" href="../manifest.webmanifest" />
+    <meta name="theme-color" content="#0f1220" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="apple-touch-icon" href="../icon-180.png" />
+    <title>Wavelength</title>
+    <meta name="description" content="A pass-the-phone party game — read your team's mind on a hidden dial." />
+    <link
+      rel="icon"
+      href="data:image/svg+xml,%3Csvg%20xmlns='http://www.w3.org/2000/svg'%20viewBox='0%200%20100%20100'%3E%3Ctext%20y='.9em'%20font-size='90'%3E🎚️%3C/text%3E%3C/svg%3E"
+    />
     <link rel="stylesheet" href="../shared/tokens.css" />
-    <link rel="stylesheet" href="../shared/guide.css" />
+    <link rel="stylesheet" href="wavelength.css" />
   </head>
   <body>
-    <main class="game">
-      <article class="guide">
-        <a class="guide__back" href="../">← All games</a>
+    <main class="game" id="app"><!-- screens are rendered here by wavelength.js --></main>
 
-        <header class="guide__head">
-          <p class="guide__kicker">How to play</p>
-          <div class="guide__titlerow">
-            <span class="guide__emoji" aria-hidden="true">🎚️</span>
-            <h1 class="screen__title">Wavelength</h1>
-          </div>
-          <p class="guide__players">2+ players</p>
-          <p class="guide__lede">The host pictures a secret number from 0 to 10, then answers a topic in character for it. Everyone else guesses the number. How close can you read their mind?</p>
-        </header>
-
-        <section class="guide__section">
-          <h2 class="guide__h">🎯 The goal</h2>
-          <ul class="guide__list">
-            <li>Guess the host’s hidden 0–10 number using only how they rate a topic.</li>
-          </ul>
-        </section>
-
-        <section class="guide__section">
-          <h2 class="guide__h">📝 Setup</h2>
-          <ol class="guide__list">
-            <li>The host secretly writes a number from 0 to 10. (Let a phone pick it to keep things honest.)</li>
-            <li>Someone names a topic or spectrum — e.g. <em>“how scary are spiders”</em>, where 0 = harmless and 10 = terrifying.</li>
-          </ol>
-        </section>
-
-        <section class="guide__section">
-          <h2 class="guide__h">🗣️ Play it out</h2>
-          <ul class="guide__list">
-            <li>The host answers as if they <em>are</em> their secret number — describing it, never naming it.</li>
-            <li>Everyone guesses the number. Closest wins the round; reveal, then pass the host role on.</li>
-          </ul>
-        </section>
-
-        <section class="guide__section">
-          <h2 class="guide__h">🎲 Variants</h2>
-          <dl class="guide__defs">
-            <dt>Spectrum cards</dt>
-            <dd>Frame each round between two extremes (cold ↔ hot, useless ↔ essential) and guess where the host’s pick sits.</dd>
-            <dt>Team dial</dt>
-            <dd>Two teams alternate: one sets the clue, the other guesses, then the third team can steal by going higher or lower.</dd>
-          </dl>
-        </section>
-
-        <section class="guide__section">
-          <h2 class="guide__h">💡 Tips</h2>
-          <ul class="guide__list">
-            <li>As host, calibrate to the <em>whole</em> scale — save your most extreme language for genuine 0s and 10s.</li>
-          </ul>
-        </section>
-
-        <a class="btn btn--ghost guide__foot" href="../">← Back to all games</a>
-      </article>
-    </main>
+    <script type="module" src="wavelength.js"></script>
   </body>
 </html>

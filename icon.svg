@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Social Games">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#2a3566" />
+      <stop offset="1" stop-color="#11142a" />
+    </linearGradient>
+  </defs>
+  <!-- Full-bleed background so the icon survives a maskable (circular) crop. -->
+  <rect width="512" height="512" rx="112" fill="url(#bg)" />
+  <!-- A die, echoing the hub's 🎲 favicon — kept inside the central safe zone. -->
+  <rect x="146" y="146" width="220" height="220" rx="44" fill="#eef1ff" />
+  <g fill="#2a3566">
+    <circle cx="196" cy="196" r="20" />
+    <circle cx="316" cy="196" r="20" />
+    <circle cx="256" cy="256" r="20" />
+    <circle cx="196" cy="316" r="20" />
+    <circle cx="316" cy="316" r="20" />
+  </g>
+</svg>

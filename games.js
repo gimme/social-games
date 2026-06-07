@@ -35,6 +35,15 @@ export const games = [
     players: '3+ players',
     path: 'impostor/',
   },
+  {
+    id: 'wavelength',
+    kind: 'game',
+    name: 'Wavelength',
+    tagline: 'Read your team’s mind on a hidden dial — the closer you land, the more you score.',
+    emoji: '🎚️',
+    players: '2+ players',
+    path: 'wavelength/',
+  },
 
   // --- How-to-play guides (reference only, for now) ------------------------
   {
@@ -54,15 +63,6 @@ export const games = [
     emoji: '💬',
     players: '3+ players',
     path: 'just-one/',
-  },
-  {
-    id: 'wavelength',
-    kind: 'guide',
-    name: 'Wavelength',
-    tagline: 'Read the host’s mind on a 0–10 scale from a single clue.',
-    emoji: '🎚️',
-    players: '2+ players',
-    path: 'wavelength/',
   },
   {
     id: 'werewords',
