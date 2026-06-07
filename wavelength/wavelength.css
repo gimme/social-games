@@ -261,9 +261,12 @@
   outline: none;
 }
 
-.dial__svg--interactive:focus-visible .dial__hub {
+.dial__svg--interactive:focus-visible .dial__needle-edge {
   stroke: var(--accent);
-  stroke-width: 4;
+}
+
+.dial__svg--interactive:focus-visible .dial__hub-edge {
+  fill: var(--accent);
 }
 
 /* Smooth white half-disc — no ticks drawn, so the scale reads as continuous.
@@ -321,6 +324,21 @@
 
 .dial__needle {
   transition: transform 0.06s ease-out;
+  /* Lift the whole needle off the dial face. */
+  filter: drop-shadow(0 2px 2px rgba(0, 0, 0, 0.35));
+}
+
+/* Black underlay: a slightly fatter line + larger hub form one silhouette, so
+   the red on top leaves a uniform ~1.5px outline around the needle and hub
+   together. */
+.dial__needle-edge {
+  stroke: #1b1b1f;
+  stroke-width: 7;
+  stroke-linecap: round;
+}
+
+.dial__hub-edge {
+  fill: #1b1b1f;
 }
 
 .dial__needle-line {
@@ -331,8 +349,6 @@
 
 .dial__hub {
   fill: #c8283c;
-  stroke: #fff;
-  stroke-width: 3;
 }
 
 /* Spectrum ends */

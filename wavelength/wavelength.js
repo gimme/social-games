@@ -575,7 +575,7 @@ function buildDial(opts) {
     for (const [a, b, cls] of bands) {
       g.append(svgEl('path', { d: sector(a, b), class: `dial__band dial__band--${cls}` }));
     }
-    const lr = R * 0.84; // sit the point numbers out near the rim, not centred
+    const lr = R * 0.9; // sit the point numbers right out near the rim
     /** @type {[number, string][]} */
     const labels = [
       [t, '4'],
@@ -599,6 +599,13 @@ function buildDial(opts) {
   let needle = null;
   if (opts.needle != null) {
     needle = svgEl('g', { class: 'dial__needle' });
+    // A black silhouette (line + hub) is drawn first; the red line + hub sit on
+    // top a touch smaller, so the two read as one piece sharing a thin outline —
+    // no white gap where the needle meets the hub. A drop shadow lifts it.
+    needle.append(
+      svgEl('line', { x1: CX, y1: CY, x2: CX, y2: CY - (R - 4), class: 'dial__needle-edge' }),
+    );
+    needle.append(svgEl('circle', { cx: CX, cy: CY, r: HUB_R + 1.5, class: 'dial__hub-edge' }));
     needle.append(
       svgEl('line', { x1: CX, y1: CY, x2: CX, y2: CY - (R - 4), class: 'dial__needle-line' }),
     );
@@ -906,6 +913,15 @@ function renderResult() {
   const round = state.round;
   if (!round) return renderHome();
 
+  // Mirror the guess screen's head (pill + one-line hint) so the dial keeps the
+  // same vertical position when you lock in — the wedge is revealed right where
+  // your eyes already are, instead of jumping up the page.
+  const pill = turnPill(
+    state.teamCount > 1 ? `Team ${state.activeTeam + 1} · Result` : 'Result',
+    state.teamCount > 1 ? state.activeTeam : null,
+  );
+  const hint = el('p', 'screen__hint', 'The target is revealed — here’s where it sat.');
+
   const dial = buildDial({
     showWedge: true,
     target: round.target,
@@ -945,7 +961,7 @@ function renderResult() {
     foot.push(end);
   }
 
-  return playScreen([], [dial.el, spectrumEnds(round.left, round.right)], foot);
+  return playScreen([pill, hint], [dial.el, spectrumEnds(round.left, round.right)], foot);
 }
 
 function renderGameOver() {
