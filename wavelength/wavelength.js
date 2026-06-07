@@ -10,9 +10,12 @@
  * points: a bullseye scores 4, the rings out from it 3 then 2, and a miss scores
  * 0 — exactly like the physical device.
  *
- * Needs two or more people. Teams (2–6) take turns being the Psychic; the first
- * to the target score wins. With one team — the default — it's pure co-op: the
- * table just keeps playing a shared score for as long as they like, no target.
+ * Needs two or more people. Teams (2–6) take turns being the Psychic. Once a team
+ * reaches the target score, only rivals that can still catch it keep playing — a
+ * team that can't reach the leader even with a perfect round is skipped — and the
+ * game ends the moment no one can catch up; a tie at the top plays on in sudden
+ * death. With one team — the default — it's pure co-op: the table just keeps a
+ * shared score for as long as they like, no target.
  *
  * Self-contained: this game imports nothing and is the only script on its page.
  * The pure scoring/geometry helpers are DOM-free so they can be unit-tested
@@ -44,6 +47,11 @@ const TICK_STEP = 100 / (TICKS - 1); // 5
 const BAND_4 = 2.5;
 const BAND_3 = 7.5;
 const BAND_2 = 12.5;
+
+// The most a team can score in a single round (a bullseye). Used to tell when a
+// lead is already out of reach, so a decided game ends at once instead of playing
+// out reply turns — or a sudden-death cycle — that can't change the result.
+const MAX_ROUND_POINTS = 4;
 
 const TEAM_COLORS = ['#6c8cff', '#4fd6a0', '#ffc857', '#ff5d6c', '#c084fc', '#38bdf8'];
 
@@ -659,14 +667,16 @@ function startGame() {
   state.deckOrder = shuffle(SPECTRUMS.map((_, i) => i));
   state.deckPos = 0;
   state.lastPoints = 0;
+  state.needle = 50;
   beginRound();
 }
 
-/** Begin a round for the current active team: fresh card, target, Psychic gate. */
+/** Begin a round for the current active team: fresh card, target, Psychic gate.
+ * The needle is left where it was — only HIDE recentres it, right before the
+ * guessing team takes over — so pressing NEXT never makes the dial jump. */
 function beginRound() {
   const [left, right] = drawSpectrum();
   state.round = { team: state.activeTeam, left, right, target: randTarget(), guess: null };
-  state.needle = 50;
   state.phase = 'reveal';
   state.gateOpen = false;
   render();
@@ -685,16 +695,62 @@ function lockGuess() {
   render();
 }
 
-/** Hand off to the next team and start their round. */
+/** Hand off to the next team and start their round. Once a team has reached the
+ * target, the phone skips any team that can't tie-or-beat the current leader on a
+ * single turn — the most it could add is MAX_ROUND_POINTS, so if that still falls
+ * short it can't change the result and sits the rest of the game out. Before anyone
+ * hits the target every team can still get there, so play just goes seat to seat.
+ * (A non-leader's score is frozen once it's skipped and the lead only grows, so a
+ * team that drops out never becomes a threat again — the scan always terminates on
+ * the leader, who is a threat to itself.) */
 function nextRound() {
-  state.activeTeam = (state.activeTeam + 1) % state.teamCount;
+  const best = Math.max(...state.scores);
+  let next = (state.activeTeam + 1) % state.teamCount;
+  if (best >= state.targetScore) {
+    while (state.scores[next] + MAX_ROUND_POINTS < best) {
+      next = (next + 1) % state.teamCount;
+    }
+  }
+  state.activeTeam = next;
   beginRound();
 }
 
-/** @returns {boolean} Whether any team has reached the target score. Co-op has
- * no target, so it never ends on its own — the table ends it themselves. */
-function someoneWon() {
-  return state.teamCount > 1 && state.scores.some((s) => s >= state.targetScore);
+/**
+ * Whether the game is over. Once a team reaches the target score, only rivals that
+ * can still tie-or-beat the leader keep playing (nextRound skips the rest) — and
+ * the game ends as soon as none are left. A rival still owed a turn this cycle (an
+ * index after the active team) can add up to MAX_ROUND_POINTS, so it counts as a
+ * live threat; a team already past its turn this cycle, or one that can't reach the
+ * leader even with a perfect round, does not. A tie at the top keeps a live threat
+ * on the board, so play runs on in sudden death until one team pulls ahead for
+ * good. Co-op (one team) has no target, so it never ends on its own — the table
+ * ends it themselves.
+ *
+ * @returns {boolean}
+ */
+function gameDecided() {
+  if (state.teamCount < 2) return false;
+  const best = Math.max(...state.scores);
+  if (best < state.targetScore) return false;
+  const leaderIdx = state.scores.indexOf(best);
+  // Any rival who could still reach the leader keeps the game going — including a
+  // team already level at the top (it can tie again → sudden death). Teams still
+  // owed a turn this cycle can add up to MAX_ROUND_POINTS; teams that already
+  // played this cycle cannot until the next one, which only happens on a tie.
+  for (let i = 0; i < state.teamCount; i++) {
+    if (i === leaderIdx) continue;
+    const owed = i > state.activeTeam ? MAX_ROUND_POINTS : 0;
+    if (state.scores[i] + owed >= best) return false;
+  }
+  return true;
+}
+
+/** @returns {boolean} Whether play has reached the target but isn't over yet —
+ * the "overtime" stretch where trailing teams still get their equalising turn and
+ * any tie at the top forces another full cycle. (If a reveal is on screen the game
+ * can't already be decided, so "some team is at the target" is enough to know.) */
+function inOvertime() {
+  return state.teamCount > 1 && Math.max(...state.scores) >= state.targetScore;
 }
 
 // --- screens ---------------------------------------------------------------
@@ -876,7 +932,7 @@ function renderHome() {
         state.targetScore = v;
         save();
         render();
-      }, { note: 'First team here wins' }),
+      }, { note: 'Reach it first to win — ties play on in sudden death' }),
     );
   }
 
@@ -895,12 +951,16 @@ function renderReveal() {
   // reveal it. This replaces the old pass-the-phone card — the dial is always on
   // screen, so handing the phone over no longer jumps to a different-looking page.
   if (!state.gateOpen) {
+    let caption;
+    if (state.teamCount > 1) {
+      caption = `Pass to Team ${state.activeTeam + 1} · Psychic only`;
+      if (inOvertime()) caption = `Sudden death · ${caption}`;
+    } else {
+      caption = 'Pass to the next Psychic';
+    }
     return renderPlay({
       showWedge: false,
-      caption:
-        state.teamCount > 1
-          ? `Pass to Team ${state.activeTeam + 1} · Psychic only`
-          : 'Pass to the next Psychic',
+      caption,
       knobLabel: 'Reveal',
       knobAria: 'Reveal the target — Psychic only',
       onKnob: () => {
@@ -943,20 +1003,20 @@ function renderResult() {
   // The wedge is revealed around the locked-in needle — right where your eyes
   // already are, since the dial never moved. The "+N" floats up as feedback, and
   // the score chip ticks up; the knob carries on to the next round.
-  const won = someoneWon();
+  const over = gameDecided();
   return renderPlay({
     showWedge: true,
-    knobLabel: won ? 'Finish' : 'Next',
-    knobAria: won ? 'See the final results' : 'Start the next round',
+    knobLabel: over ? 'Finish' : 'Next',
+    knobAria: over ? 'See the final results' : 'Start the next round',
     onKnob: () => {
-      if (won) {
+      if (over) {
         state.phase = 'gameover';
         render();
       } else {
         nextRound();
       }
     },
-    showExit: !won,
+    showExit: !over,
     points: state.lastPoints,
   });
 }
