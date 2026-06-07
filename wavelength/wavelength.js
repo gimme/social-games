@@ -686,8 +686,8 @@ function startGame() {
 }
 
 /** Begin a round for the current active team: fresh card, target, Psychic gate.
- * The needle is left where it was — only HIDE recentres it, right before the
- * guessing team takes over — so pressing NEXT never makes the dial jump. */
+ * The needle is left wherever it last sat — nothing recentres it during play, so
+ * the dial never jumps; it only moves when someone drags it to a new guess. */
 function beginRound() {
   const [left, right] = drawSpectrum();
   state.round = { team: state.activeTeam, left, right, target: randTarget(), guess: null };
@@ -991,7 +991,9 @@ function renderReveal() {
     knobLabel: 'Hide',
     knobAria: 'Hide the target and pass to your team',
     onKnob: () => {
-      state.needle = 50;
+      // Leave the needle where the previous guess left it — the guessing team
+      // drags from there. It carries no hint (it tracked last round's target),
+      // and leaving it put means the dial doesn't jump on the hand-off.
       state.phase = 'guess';
       render();
     },
