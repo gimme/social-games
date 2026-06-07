@@ -10,80 +10,36 @@
   gap: var(--space-4);
 }
 
-/* Dial-centred screens are built from three groups (see playScreen()): a head
-   above the wheel, the stage (wheel + spectrum), and a foot below. Portrait
-   just stacks them; landscape (further down) reflows to a big wheel + a compact
-   side column. */
-.screen__head,
-.screen__foot {
+/* Play screens (reveal / guess / result) hand the whole viewport to the dial.
+   Every bit of chrome — score, spectrum ends, the knob — is overlaid into the
+   empty corners of the half-disc, so the dial's box is identical on all three
+   steps and the graphic never jumps. The dial keeps the viewBox's aspect ratio,
+   which also keeps needle-dragging accurate. */
+.game:has(.screen--play) {
+  max-width: none;
+  height: 100dvh;
+  padding: max(var(--space-2), env(safe-area-inset-top))
+    max(var(--space-3), env(safe-area-inset-right))
+    max(var(--space-2), env(safe-area-inset-bottom))
+    max(var(--space-3), env(safe-area-inset-left));
+  overflow: hidden;
   display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
 }
 
-.screen__stage {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
+.screen--play {
+  flex: 1;
+  min-height: 0;
+  align-items: center;
+  justify-content: center;
 }
 
-.screen__stage .dial__svg {
-  margin: 0;
-}
-
-/* Landscape: hand the whole viewport to the wheel, with the controls stacked
-   beside it. The wheel caps its width so its (fixed-ratio) height always fits
-   the screen, and the controls beside it scroll only if they overrun the short
-   viewport; the wheel's box still matches the viewBox, which keeps needle
-   dragging accurate. Side padding clears any notch via the safe-area insets. */
-@media (orientation: landscape) {
-  .game:has(.screen--play) {
-    max-width: none;
-    height: 100dvh;
-    padding: var(--space-3) max(var(--space-4), env(safe-area-inset-right))
-      var(--space-3) max(var(--space-4), env(safe-area-inset-left));
-    overflow: hidden;
-  }
-
-  .screen--play {
-    height: 100%;
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) minmax(11rem, 16rem);
-    grid-template-rows: auto minmax(0, 1fr);
-    grid-template-areas:
-      'stage head'
-      'stage foot';
-    column-gap: var(--space-5);
-  }
-
-  .screen--play .screen__head {
-    grid-area: head;
-  }
-
-  /* The controls fill the column under the head and scroll within it if they're
-     taller than the viewport — so on the reveal the result card + scoreboard +
-     both buttons stay reachable instead of being clipped off the bottom. They
-     centre vertically when they fit (safe-center falls back to the top so a tall
-     stack never has its first item scrolled out of reach). */
-  .screen--play .screen__foot {
-    grid-area: foot;
-    min-height: 0;
-    overflow-y: auto;
-    justify-content: safe center;
-  }
-
-  .screen--play .screen__stage {
-    grid-area: stage;
-    justify-content: center;
-    align-items: center;
-    min-height: 0;
-  }
-
-  .screen--play .screen__stage .dial__svg,
-  .screen--play .screen__stage .spectrum {
-    width: 100%;
-    max-width: calc((100dvh - 5.5rem) * 1.66);
-  }
+/* The dial fills the viewport while holding the graphic's 320×200 ratio: full
+   height in landscape, full width in portrait, always centred. */
+.dial {
+  position: relative;
+  width: min(100%, calc((100dvh - 1.5rem) * 1.6));
+  aspect-ratio: 320 / 200;
+  max-height: 100%;
 }
 
 .screen__title {
@@ -93,12 +49,6 @@
 .screen__lede {
   margin: 0;
   color: var(--text-muted);
-}
-
-.screen__hint {
-  margin: 0;
-  color: var(--text-muted);
-  font-size: 0.9rem;
 }
 
 .screen__howto {
@@ -172,80 +122,15 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Turn pill */
-.pill {
-  align-self: center;
-  padding: var(--space-2) var(--space-4);
-  border: 1px solid var(--accent);
-  border-radius: 999px;
-  background: var(--bg-elevated);
-  color: var(--accent);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-size: 0.78rem;
-  font-weight: 700;
-}
-
-/* Pass gate (reused card pattern) */
-.card {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: var(--space-3);
-  min-height: 14rem;
-  padding: var(--space-6) var(--space-5);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  background: var(--bg-card);
-  box-shadow: var(--shadow);
-  text-align: center;
-}
-
-.card--tap {
-  cursor: pointer;
-  user-select: none;
-  -webkit-user-select: none;
-  transition: transform 0.04s ease, border-color 0.15s ease, box-shadow 0.15s ease;
-}
-
-.card--tap:hover {
-  border-color: var(--accent);
-}
-
-.card--tap:active {
-  transform: translateY(1px);
-}
-
-.card--tap:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 3px;
-}
-
-.card--gate {
-  border-style: dashed;
-  border-color: var(--accent);
-  background: linear-gradient(180deg, var(--bg-elevated), var(--bg-card));
-}
-
-.card__hint {
-  color: var(--text-muted);
-  font-size: 1.05rem;
-}
-
-.card__action {
-  color: var(--accent);
-  font-size: 1.4rem;
-  font-weight: 700;
-}
-
 /* The dial */
 .dial__svg {
+  position: absolute;
+  inset: 0;
   width: 100%;
-  height: auto;
+  height: 100%;
   display: block;
-  margin: var(--space-2) 0 0;
   overflow: visible;
+  z-index: 1;
 }
 
 .dial__svg--interactive {
@@ -263,10 +148,6 @@
 
 .dial__svg--interactive:focus-visible .dial__needle-edge {
   stroke: var(--accent);
-}
-
-.dial__svg--interactive:focus-visible .dial__hub-edge {
-  fill: var(--accent);
 }
 
 /* Smooth white half-disc — no ticks drawn, so the scale reads as continuous.
@@ -337,49 +218,224 @@
   stroke-linecap: round;
 }
 
-.dial__hub-edge {
-  fill: #1b1b1f;
-}
-
 .dial__needle-line {
   stroke: #c8283c;
   stroke-width: 4;
   stroke-linecap: round;
 }
 
-.dial__hub {
-  fill: #c8283c;
+/* The hub knob — the dial's one control. It sits on the pivot (50%, 80% of the
+   320×200 box), covering the needle's base, and reads as the same red knob the
+   needle pivots on. Pressing it advances the step. */
+.dial__knob {
+  position: absolute;
+  left: 50%;
+  top: 80%;
+  transform: translate(-50%, -50%);
+  width: 21%;
+  aspect-ratio: 1;
+  z-index: 3;
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 2px solid #1b1b1f;
+  border-radius: 50%;
+  background: radial-gradient(circle at 50% 36%, #e2475c, #c8283c 72%);
+  color: #fff;
+  box-shadow: 0 3px 7px rgba(0, 0, 0, 0.45), inset 0 1px 1px rgba(255, 255, 255, 0.3);
+  touch-action: manipulation;
+  transition: transform 0.08s ease, box-shadow 0.08s ease;
 }
 
-/* Spectrum ends */
-.spectrum {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  margin-top: calc(-1 * var(--space-2));
+.dial__knob:hover {
+  box-shadow: 0 4px 11px rgba(0, 0, 0, 0.5), inset 0 1px 1px rgba(255, 255, 255, 0.35);
 }
 
-.spectrum__end {
-  flex: 1;
-  padding: var(--space-2) var(--space-3);
+.dial__knob:active {
+  transform: translate(-50%, -50%) scale(0.93);
+}
+
+.dial__knob:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.dial__knob-label {
+  font-weight: 800;
+  font-size: clamp(0.66rem, 3vmin, 1.15rem);
+  line-height: 1.05;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Hand-off note on the dial face (the "pass to …" step). A dark pill on the
+   blank white disc, so it reads clearly without a separate screen. */
+.dial__caption {
+  position: absolute;
+  left: 50%;
+  top: 40%;
+  transform: translate(-50%, -50%);
+  z-index: 2;
+  max-width: 66%;
+  padding: 0.4em 0.95em;
   border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-card);
+  border-radius: 999px;
+  background: rgba(15, 18, 32, 0.82);
+  color: var(--text);
+  text-align: center;
   font-weight: 700;
-  overflow-wrap: anywhere;
+  font-size: clamp(0.82rem, 3vmin, 1.35rem);
+  line-height: 1.2;
+  pointer-events: none;
 }
 
-.spectrum__end--left {
+/* Spectrum ends — pinned to the dial's bottom corners, where each end of the
+   scale sits. Non-interactive, so they never swallow a needle drag. */
+.dial__end {
+  position: absolute;
+  bottom: 3%;
+  max-width: 40%;
+  padding: 0.32em 0.8em;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(15, 18, 32, 0.72);
+  color: var(--text);
+  font-weight: 700;
+  font-size: clamp(0.9rem, 3.6vmin, 1.6rem);
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.dial__end--left {
+  left: 1.5%;
   text-align: left;
 }
 
-.spectrum__end--right {
+.dial__end--right {
+  right: 1.5%;
   text-align: right;
 }
 
-.spectrum__arrow {
+/* Status chip (whose turn + running score) in the top-right corner. */
+.status {
+  position: absolute;
+  top: 1%;
+  right: 1.5%;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.1em;
+  padding: 0.3em 0.6em;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: rgba(15, 18, 32, 0.6);
+  font-variant-numeric: tabular-nums;
+  pointer-events: none;
+}
+
+.status__turn {
+  font-weight: 800;
+  font-size: clamp(0.72rem, 2.5vmin, 1.05rem);
+}
+
+.status__scores {
+  display: flex;
+  gap: 0.55em;
+  font-weight: 700;
+  font-size: clamp(0.66rem, 2.2vmin, 0.95rem);
+}
+
+.status__num--active {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+/* "End" affordance, top-left corner (the only exit from an open-ended game). */
+.dial__exit {
+  position: absolute;
+  top: 1%;
+  left: 1.5%;
+  z-index: 2;
+  padding: 0.35em 0.85em;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: rgba(15, 18, 32, 0.6);
   color: var(--text-muted);
-  font-size: 1.1rem;
+  font-weight: 700;
+  font-size: clamp(0.7rem, 2.3vmin, 0.95rem);
+  transition: color 0.15s ease, border-color 0.15s ease;
+}
+
+.dial__exit:hover {
+  color: var(--text);
+  border-color: var(--text-muted);
+}
+
+.dial__exit:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* The points float that replaces the result banner. */
+.points-pop {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 4;
+  font-weight: 800;
+  font-size: clamp(1.8rem, 8vmin, 3.4rem);
+  -webkit-text-stroke: 1.5px #1b1b1f;
+  paint-order: stroke fill;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.6);
+  pointer-events: none;
+  animation: points-rise 1.2s ease-out forwards;
+}
+
+.points-pop--p4 {
+  color: #4d86ff;
+}
+
+.points-pop--p3 {
+  color: #ff4d4f;
+}
+
+.points-pop--p2 {
+  color: #ff9636;
+}
+
+.points-pop--p0 {
+  color: var(--text-muted);
+}
+
+@keyframes points-rise {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, 10%) scale(0.6);
+  }
+  25% {
+    opacity: 1;
+    transform: translate(-50%, -30%) scale(1.12);
+  }
+  75% {
+    opacity: 1;
+    transform: translate(-50%, -55%) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -105%) scale(1);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .points-pop {
+    animation: none;
+    top: 30%;
+  }
 }
 
 /* Scoreboard */

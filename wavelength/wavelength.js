@@ -225,15 +225,15 @@ function teamColor(i) {
 
 // SVG viewBox + dial layout. The dial is a filled half-disc: the needle pivots
 // at (CX, CY) on the flat (bottom) edge, and the arc sweeps the upper half from
-// p=0 (far left) to p=100 (far right). VBH leaves room below the pivot for the
-// chunky hub knob (which straddles the flat edge) and the frame, so the whole
-// dial fits the box.
+// p=0 (far left) to p=100 (far right). The chunky hub knob at the pivot is an
+// HTML button overlaid on top (see .dial__knob) — it's both the needle's anchor
+// and the game's one control, so a step advances by pressing it. VBH leaves a
+// little room below the pivot for that knob and the frame, so the dial fits.
 const VBW = 320;
-const VBH = 192;
+const VBH = 200;
 const CX = 160;
 const CY = 160;
 const R = 140; // disc radius
-const HUB_R = 27; // pivot knob radius (straddles the flat edge)
 
 /** @param {number} p @returns {number} Standard (y-up) angle in degrees for scale position p. */
 function posAngle(p) {
@@ -440,25 +440,6 @@ function svgEl(tag, attrs) {
 }
 
 /**
- * Make a card behave as a big tap target (the card *is* the button).
- *
- * @param {HTMLElement} node @param {() => void} onActivate @returns {HTMLElement}
- */
-function makeTappable(node, onActivate) {
-  node.classList.add('card--tap');
-  node.setAttribute('role', 'button');
-  node.setAttribute('tabindex', '0');
-  node.addEventListener('click', onActivate);
-  node.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter' || e.key === ' ') {
-      e.preventDefault();
-      onActivate();
-    }
-  });
-  return node;
-}
-
-/**
  * A labelled +/- stepper.
  *
  * @param {string} label @param {number} value @param {number} min @param {number} max
@@ -485,34 +466,6 @@ function stepper(label, value, min, max, step, onChange, opts) {
   control.append(dec, val, inc);
   field.append(control);
   return field;
-}
-
-/**
- * A small coloured pill naming whose turn it is.
- *
- * @param {string} text @param {number | null} teamIdx @returns {HTMLElement}
- */
-function turnPill(text, teamIdx) {
-  const pill = el('div', 'pill', text);
-  if (teamIdx != null) {
-    const c = teamColor(teamIdx);
-    pill.style.color = c;
-    pill.style.borderColor = c;
-  }
-  return pill;
-}
-
-/**
- * The spectrum's two ends, shown beneath the dial.
- *
- * @param {string} left @param {string} right @returns {HTMLElement}
- */
-function spectrumEnds(left, right) {
-  const row = el('div', 'spectrum');
-  row.append(el('span', 'spectrum__end spectrum__end--left', left));
-  row.append(el('span', 'spectrum__arrow', '↔'));
-  row.append(el('span', 'spectrum__end spectrum__end--right', right));
-  return row;
 }
 
 /** The running scoreboard (co-op shows one line; teams show coloured chips). */
@@ -593,23 +546,20 @@ function buildDial(opts) {
     svg.append(g);
   }
 
-  // Needle.
+  // Needle: a red line over a slightly fatter black line, so the two read as one
+  // piece sharing a thin dark outline; a drop shadow lifts it. Its base at the
+  // pivot is covered by the HTML hub knob (.dial__knob), which sits on top.
   let current = opts.needle ?? 50;
   /** @type {SVGElement | null} */
   let needle = null;
   if (opts.needle != null) {
     needle = svgEl('g', { class: 'dial__needle' });
-    // A black silhouette (line + hub) is drawn first; the red line + hub sit on
-    // top a touch smaller, so the two read as one piece sharing a thin outline —
-    // no white gap where the needle meets the hub. A drop shadow lifts it.
     needle.append(
       svgEl('line', { x1: CX, y1: CY, x2: CX, y2: CY - (R - 4), class: 'dial__needle-edge' }),
     );
-    needle.append(svgEl('circle', { cx: CX, cy: CY, r: HUB_R + 1.5, class: 'dial__hub-edge' }));
     needle.append(
       svgEl('line', { x1: CX, y1: CY, x2: CX, y2: CY - (R - 4), class: 'dial__needle-line' }),
     );
-    needle.append(svgEl('circle', { cx: CX, cy: CY, r: HUB_R, class: 'dial__hub' }));
     svg.append(needle);
   }
 
@@ -750,30 +700,133 @@ function someoneWon() {
 // --- screens ---------------------------------------------------------------
 
 /**
- * Assemble a dial-centred screen in three groups so the layout can reflow:
- * stacked head → stage → foot in portrait, and a big wheel beside compact,
- * non-scrolling controls in landscape (see .screen--play in the stylesheet).
+ * The hub knob at the dial's pivot — the game's one control. Pressing it
+ * advances the step (reveal → guess → result → next). It's deliberately the same
+ * red knob the needle pivots on, so the dial reads as a single physical device.
  *
- * @param {(HTMLElement | SVGElement)[]} head   Above the wheel (turn pill, hint).
- * @param {(HTMLElement | SVGElement)[]} stage  The wheel + spectrum ends.
- * @param {(HTMLElement | SVGElement)[]} foot   Below the wheel (buttons, score).
+ * @param {string} label @param {string} aria @param {() => void} onPress
  * @returns {HTMLElement}
  */
-function playScreen(head, stage, foot) {
+function knobButton(label, aria, onPress) {
+  const btn = /** @type {HTMLButtonElement} */ (el('button', 'dial__knob'));
+  btn.type = 'button';
+  btn.setAttribute('aria-label', aria);
+  btn.append(el('span', 'dial__knob-label', label));
+  btn.addEventListener('click', onPress);
+  // A press on the knob must not also start a needle drag on the dial beneath it.
+  btn.addEventListener('pointerdown', (e) => e.stopPropagation());
+  return btn;
+}
+
+/**
+ * A small "End" affordance in the dial's top-left corner — the way to stop a
+ * game early (the only exit from an open-ended co-op session).
+ *
+ * @returns {HTMLElement}
+ */
+function exitButton() {
+  const btn = /** @type {HTMLButtonElement} */ (el('button', 'dial__exit', 'End'));
+  btn.type = 'button';
+  btn.setAttribute('aria-label', 'End game and see results');
+  btn.addEventListener('click', () => {
+    state.phase = 'gameover';
+    render();
+  });
+  btn.addEventListener('pointerdown', (e) => e.stopPropagation());
+  return btn;
+}
+
+/**
+ * The compact status chip in the dial's top-right corner: whose turn it is and
+ * the running score (co-op shows just the score). Small enough to tuck into the
+ * empty corner of the half-disc without ever shifting the dial.
+ *
+ * @returns {HTMLElement}
+ */
+function playStatus() {
+  const wrap = el('div', 'status');
+  if (state.teamCount === 1) {
+    wrap.append(el('span', 'status__turn', `Score ${state.scores[0]}`));
+    return wrap;
+  }
+  const turn = el('span', 'status__turn', `Team ${state.activeTeam + 1}`);
+  turn.style.color = teamColor(state.activeTeam);
+  wrap.append(turn);
+  const scores = el('div', 'status__scores');
+  for (let i = 0; i < state.teamCount; i++) {
+    const n = el('span', 'status__num', String(state.scores[i]));
+    n.style.color = teamColor(i);
+    if (i === state.activeTeam) n.classList.add('status__num--active');
+    scores.append(n);
+  }
+  wrap.append(scores);
+  return wrap;
+}
+
+/**
+ * A spectrum end label, pinned to a bottom corner of the dial — where that end
+ * of the scale actually sits (p=0 left, p=100 right), like the printed words on
+ * the physical board.
+ *
+ * @param {'left' | 'right'} side @param {string} text @returns {HTMLElement}
+ */
+function spectrumEnd(side, text) {
+  return el('span', `dial__end dial__end--${side}`, text);
+}
+
+/**
+ * A points number that floats up over the dial on the reveal, then fades — the
+ * brief feedback that replaces the old result banner. Positioned absolutely, so
+ * it never moves the dial.
+ *
+ * @param {number} pts @returns {HTMLElement}
+ */
+function pointsPop(pts) {
+  return el('div', `points-pop points-pop--p${pts}`, `+${pts}`);
+}
+
+/**
+ * Build a play screen: the full-bleed dial with every control overlaid into its
+ * corners. Reveal, guess and result all go through here with the same skeleton,
+ * so only the dial's contents (wedge, needle) and the knob label change between
+ * steps — the graphic itself holds a steady, static position.
+ *
+ * @param {Object} opts
+ * @param {boolean} opts.showWedge   Reveal the target bands.
+ * @param {string} opts.knobLabel    Text on the hub knob.
+ * @param {string} opts.knobAria     Accessible label for the knob.
+ * @param {() => void} opts.onKnob   What pressing the knob does.
+ * @param {string} [opts.caption]    A centred note on the dial face (hand-off).
+ * @param {boolean} [opts.showExit]  Show the "End" affordance.
+ * @param {number} [opts.points]     Float a "+N" over the dial (result step).
+ * @returns {HTMLElement}
+ */
+function renderPlay(opts) {
+  const round = state.round;
+  if (!round) return renderHome();
+
   const screen = el('section', 'screen screen--play');
-  if (head.length) {
-    const group = el('div', 'screen__head');
-    group.append(...head);
-    screen.append(group);
-  }
-  const stageGroup = el('div', 'screen__stage');
-  stageGroup.append(...stage);
-  screen.append(stageGroup);
-  if (foot.length) {
-    const group = el('div', 'screen__foot');
-    group.append(...foot);
-    screen.append(group);
-  }
+  const dial = el('div', 'dial');
+
+  const built = buildDial({
+    showWedge: opts.showWedge,
+    target: round.target,
+    needle: state.needle,
+    interactive: true,
+    onInput: (/** @type {number} */ p) => {
+      state.needle = p;
+    },
+  });
+  dial.append(built.el);
+
+  dial.append(spectrumEnd('left', round.left), spectrumEnd('right', round.right));
+  dial.append(playStatus());
+  if (opts.caption) dial.append(el('div', 'dial__caption', opts.caption));
+  if (opts.showExit) dial.append(exitButton());
+  if (opts.points != null) dial.append(pointsPop(opts.points));
+  dial.append(knobButton(opts.knobLabel, opts.knobAria, opts.onKnob));
+
+  screen.append(dial);
   return screen;
 }
 
@@ -838,130 +891,74 @@ function renderReveal() {
   const round = state.round;
   if (!round) return renderHome();
 
+  // Hand-off step: the target stays hidden until the Psychic presses the knob to
+  // reveal it. This replaces the old pass-the-phone card — the dial is always on
+  // screen, so handing the phone over no longer jumps to a different-looking page.
   if (!state.gateOpen) {
-    const screen = el('section', 'screen');
-    screen.append(scoreboard());
-    const card = el('section', 'card card--gate');
-    card.append(
-      el(
-        'span',
-        'card__hint',
+    return renderPlay({
+      showWedge: false,
+      caption:
         state.teamCount > 1
-          ? `Pass to Team ${state.activeTeam + 1}. Pick one Psychic.`
-          : 'Pass to the next Psychic.',
-      ),
-    );
-    card.append(el('span', 'card__action', 'I’m the Psychic'));
-    makeTappable(card, () => {
-      state.gateOpen = true;
-      render();
+          ? `Pass to Team ${state.activeTeam + 1} · Psychic only`
+          : 'Pass to the next Psychic',
+      knobLabel: 'Reveal',
+      knobAria: 'Reveal the target — Psychic only',
+      onKnob: () => {
+        state.gateOpen = true;
+        render();
+      },
     });
-    screen.append(card);
-    return screen;
   }
 
-  const pill = turnPill(
-    state.teamCount > 1 ? `Team ${state.activeTeam + 1} · Psychic` : 'Psychic',
-    state.teamCount > 1 ? state.activeTeam : null,
-  );
-  const hint = el(
-    'p',
-    'screen__hint',
-    'Only you see the target. Think of a clue for where it sits, say it out ' +
-      'loud, then hand the phone to your team.',
-  );
-
-  const dial = buildDial({ showWedge: true, target: round.target, needle: null, interactive: false });
-
-  const go = el('button', 'btn', 'Hide target & pass to team');
-  go.addEventListener('click', () => {
-    state.needle = 50;
-    state.phase = 'guess';
-    render();
+  // Only the Psychic sees this: the target wedge is revealed. They say their clue
+  // out loud, then press the knob to hide it and pass the phone to their team.
+  return renderPlay({
+    showWedge: true,
+    knobLabel: 'Hide',
+    knobAria: 'Hide the target and pass to your team',
+    onKnob: () => {
+      state.needle = 50;
+      state.phase = 'guess';
+      render();
+    },
   });
-
-  return playScreen([pill, hint], [dial.el, spectrumEnds(round.left, round.right)], [go]);
 }
 
 function renderGuess() {
-  const round = state.round;
-  if (!round) return renderHome();
+  if (!state.round) return renderHome();
 
-  const pill = turnPill(
-    state.teamCount > 1 ? `Team ${state.activeTeam + 1} · Guessing` : 'Find the target',
-    state.teamCount > 1 ? state.activeTeam : null,
-  );
-  const hint = el('p', 'screen__hint', 'Go by the Psychic’s clue. Drag the needle to your guess.');
-
-  const dial = buildDial({
+  // The team swings the needle (drag anywhere on the dial) to the Psychic's clue,
+  // then presses the knob to lock it in.
+  return renderPlay({
     showWedge: false,
-    target: round.target,
-    needle: state.needle,
-    interactive: true,
-    onInput: (/** @type {number} */ p) => {
-      state.needle = p;
-    },
+    knobLabel: 'Lock',
+    knobAria: 'Lock in your guess',
+    onKnob: () => lockGuess(),
   });
-
-  const lock = el('button', 'btn', 'Lock in guess');
-  lock.addEventListener('click', () => lockGuess());
-
-  return playScreen([pill, hint], [dial.el, spectrumEnds(round.left, round.right)], [lock]);
 }
 
 function renderResult() {
-  const round = state.round;
-  if (!round) return renderHome();
+  if (!state.round) return renderHome();
 
-  // Mirror the guess screen's head (pill + one-line hint) so the dial keeps the
-  // same vertical position when you lock in — the wedge is revealed right where
-  // your eyes already are, instead of jumping up the page.
-  const pill = turnPill(
-    state.teamCount > 1 ? `Team ${state.activeTeam + 1} · Result` : 'Result',
-    state.teamCount > 1 ? state.activeTeam : null,
-  );
-  const hint = el('p', 'screen__hint', 'The target is revealed — here’s where it sat.');
-
-  const dial = buildDial({
-    showWedge: true,
-    target: round.target,
-    needle: round.guess,
-    interactive: false,
-  });
-
-  const pts = state.lastPoints;
-  const card = el('div', `result result--p${pts}`);
-  card.append(el('span', 'result__pts', `+${pts}`));
-  card.append(el('span', 'result__label', scoreLabel(pts)));
-  if (state.teamCount > 1) {
-    card.append(el('span', 'result__who', `for Team ${state.activeTeam + 1}`));
-  }
-
-  /** @type {(HTMLElement | SVGElement)[]} */
-  const foot = [card, scoreboard()];
-
+  // The wedge is revealed around the locked-in needle — right where your eyes
+  // already are, since the dial never moved. The "+N" floats up as feedback, and
+  // the score chip ticks up; the knob carries on to the next round.
   const won = someoneWon();
-  const primary = el('button', 'btn', won ? 'See final results' : 'Next round');
-  primary.addEventListener('click', () => {
-    if (won) {
-      state.phase = 'gameover';
-      render();
-    } else {
-      nextRound();
-    }
+  return renderPlay({
+    showWedge: true,
+    knobLabel: won ? 'Finish' : 'Next',
+    knobAria: won ? 'See the final results' : 'Start the next round',
+    onKnob: () => {
+      if (won) {
+        state.phase = 'gameover';
+        render();
+      } else {
+        nextRound();
+      }
+    },
+    showExit: !won,
+    points: state.lastPoints,
   });
-  foot.push(primary);
-
-  if (!won) {
-    const end = el('button', 'btn btn--ghost', 'End game');
-    end.addEventListener('click', () => {
-      state.phase = 'gameover';
-      render();
-    });
-    foot.push(end);
-  }
-
-  return playScreen([pill, hint], [dial.el, spectrumEnds(round.left, round.right)], foot);
 }
 
 function renderGameOver() {
