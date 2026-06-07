@@ -10,9 +10,19 @@ internet needed once the page has loaded.
 
 ## Games
 
-| Game | Players | What it does |
+The home page has two sections: **Featured** games the phone actually runs, and
+**How to play** — reference cards for games the phone doesn't run (yet).
+
+| Featured | Players | What it does |
 | --- | --- | --- |
 | 🕵️ Impostor | 3+ | Players fill the word pool; everyone gets the same secret word — except the impostor. |
+
+Plus **how-to-play guides** for 17 more party games — Impostor Q&A, Just One,
+Wavelength, Werewords, Who Am I?, Heads Up, Family Feud, 8 Words, Word Chain
+Link, Who Knows Most?, Don't Copy My Answer, I Can Name…, I'm Going Camping,
+Mind Meld, Top 5 Picks, Form a Word, and the 12345678 Rhythm challenge. These
+are rules-and-refreshers cards; some are natural candidates to grow into full
+phone-run games later.
 
 ## How it's built
 
@@ -27,13 +37,16 @@ without touching anything else.
 
 ```
 index.html         the hub / home page
-hub.js, hub.css    renders the list of games
-games.js           the one place the hub lists its games
+hub.js, hub.css    renders the list of games, split into Featured / How to play
+games.js           the one place the hub lists its games and guides
 shared/tokens.css  shared theme (colors, spacing) — optional for a game to use
+shared/guide.css   shared styling for the how-to-play guide pages
 impostor/          a self-contained game (folder name = its URL)
   index.html
   impostor.js
   impostor.css
+just-one/          a how-to-play guide — a self-contained folder, like a game
+  index.html
 jsconfig.json      editor type-checking for the plain JS (no build, just hints)
 ```
 
@@ -70,6 +83,19 @@ files exactly as they are in the repo.
 Keep each game standalone: don't import from other games. Using
 `shared/tokens.css` for a consistent look is fine and encouraged. Inside a game,
 link it as `../shared/tokens.css`.
+
+## Add a how-to-play guide
+
+A guide is just a game folder with no game in it yet:
+
+1. Create a folder `<your-id>/` with a static `index.html` rules page. Copying
+   an existing guide (e.g. `just-one/`) is the easiest start — link
+   `../shared/tokens.css` and `../shared/guide.css` for the shared look.
+2. Add one entry to `games.js` with `kind: 'guide'` and `path: '<your-id>/'`.
+
+When a guide grows into a full phone-run game, keep the folder and its URL:
+`index.html` becomes the app, move the rules into `how-to-play.html` (as
+`impostor/` does), and flip `kind` to `'game'`.
 
 ## Deploy to GitHub Pages
 

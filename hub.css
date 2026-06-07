@@ -23,6 +23,35 @@
   color: var(--text-muted);
 }
 
+.hub__sections {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.hub__section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.hub__section-head {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.hub__section-title {
+  font-size: 1.3rem;
+  margin: 0;
+}
+
+.hub__section-sub {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
 .game-grid {
   list-style: none;
   margin: 0;
@@ -33,6 +62,7 @@
 }
 
 .game-card__link {
+  position: relative;
   display: flex;
   align-items: center;
   gap: var(--space-4);
@@ -44,6 +74,21 @@
   color: var(--text);
   text-decoration: none;
   transition: transform 0.08s ease, border-color 0.15s ease;
+}
+
+.game-card__badge {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  padding: 2px var(--space-2);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.65rem;
+  font-weight: 700;
 }
 
 .game-card__link:hover {

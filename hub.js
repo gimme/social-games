@@ -17,27 +17,61 @@ function el(tag, className, text) {
   return node;
 }
 
-const grid = document.getElementById('game-grid');
+/**
+ * The hub's sections, in display order. Each pulls the games of one `kind` out
+ * of the manifest, so adding a game to games.js drops it into the right place.
+ *
+ * @type {Array<{ kind: import('./games.js').Game['kind'], title: string, subtitle?: string }>}
+ */
+const SECTIONS = [
+  { kind: 'game', title: 'Featured', subtitle: 'Games the phone runs for you.' },
+  {
+    kind: 'guide',
+    title: 'How to play',
+    subtitle: 'Rules and refreshers for games the phone doesn’t run — yet.',
+  },
+];
 
-if (grid) {
-  for (const game of games) {
-    const link = el('a', 'game-card__link');
-    /** @type {HTMLAnchorElement} */ (link).href = game.path;
+/** Build one game/guide card (an <li>). */
+function card(game) {
+  const link = el('a', 'game-card__link');
+  /** @type {HTMLAnchorElement} */ (link).href = game.path;
 
-    const emoji = el('span', 'game-card__emoji', game.emoji);
-    emoji.setAttribute('aria-hidden', 'true');
+  const emoji = el('span', 'game-card__emoji', game.emoji);
+  emoji.setAttribute('aria-hidden', 'true');
 
-    const body = el('span', 'game-card__body');
-    body.append(
-      el('span', 'game-card__name', game.name),
-      el('span', 'game-card__tagline', game.tagline),
-      el('span', 'game-card__players', game.players),
-    );
+  const body = el('span', 'game-card__body');
+  body.append(
+    el('span', 'game-card__name', game.name),
+    el('span', 'game-card__tagline', game.tagline),
+    el('span', 'game-card__players', game.players),
+  );
 
-    link.append(emoji, body);
+  link.append(emoji, body);
+  if (game.kind === 'guide') link.append(el('span', 'game-card__badge', 'Guide'));
 
-    const item = el('li', 'game-card');
-    item.append(link);
-    grid.append(item);
+  const item = el('li', 'game-card');
+  item.append(link);
+  return item;
+}
+
+const root = document.getElementById('hub-sections');
+
+if (root) {
+  for (const section of SECTIONS) {
+    const entries = games.filter((g) => g.kind === section.kind);
+    if (entries.length === 0) continue;
+
+    const wrap = el('section', 'hub__section');
+    const head = el('div', 'hub__section-head');
+    head.append(el('h2', 'hub__section-title', section.title));
+    if (section.subtitle) head.append(el('p', 'hub__section-sub', section.subtitle));
+    wrap.append(head);
+
+    const grid = el('ul', 'game-grid');
+    for (const game of entries) grid.append(card(game));
+    wrap.append(grid);
+
+    root.append(wrap);
   }
 }
