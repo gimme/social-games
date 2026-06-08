@@ -6,9 +6,15 @@
  * One player (the Psychic) privately sees a hidden target wedge on a half-moon
  * dial and a spectrum (e.g. Cold ↔ Hot). They say a one-line clue out loud,
  * then hand the phone to their team, who swing a needle to where they think the
- * target sits. The needle snaps between 21 marks; the closer it lands, the more
+ * target sits. The needle snaps between 63 marks; the closer it lands, the more
  * points: a bullseye scores 4, the rings out from it 3 then 2, and a miss scores
- * 0 — exactly like the physical device.
+ * 0 — exactly like the physical device. The dial is really the front of a full
+ * wheel carrying a twin copy of the wedge 180° away, so the visible face joins
+ * back onto itself: the scoring wedge wraps around the ends, a target hugging one
+ * end spilling the far side of its wedge onto the opposite end. A narrow blind
+ * seam — two marks, one trimmed off each visible end — bridges them, so a 4
+ * pinned to a corner shows half of itself hugging that end, never echoed onto the
+ * far end nor ever swallowed whole.
  *
  * Needs two or more people. Teams (2–6) take turns being the Psychic. Once a team
  * reaches the target score, only rivals that can still catch it keep playing — a
@@ -36,17 +42,30 @@ const DEFAULT_TARGET = 10;
 // The needle snaps to one of TICKS evenly-spaced marks across the 0..100 scale
 // (no fine-tuning between them). TICK_STEP is the gap between marks, in scale
 // units, so mark j sits at j * TICK_STEP.
-const TICKS = 21;
-const TICK_STEP = 100 / (TICKS - 1); // 5
+const TICKS = 63;
+const TICK_STEP = 100 / (TICKS - 1); // ≈1.61
 
-// Scoring band half-widths, in 0..100 scale units. The target wedge is the five
-// marks 2-3-4-3-2 of the real device, each one TICK_STEP wide: the centre mark
-// (≤ BAND_4) scores 4, the marks either side (≤ BAND_3) score 3, and the next
-// ones out (≤ BAND_2) score 2. The target centre always sits on a mark, so a
-// guess scores 4/3/2/0 purely by how many marks away it lands.
-const BAND_4 = 2.5;
-const BAND_3 = 7.5;
-const BAND_2 = 12.5;
+// The 2-3-4-3-2 target wedge is five equal-width bands fanning out from the
+// centre, and each one is exactly BAND_SLOTS marks wide — so every coloured
+// section holds the same number of slots (the bullseye no more than a 3 or a 2).
+// BAND_SLOTS must be odd: that centres the bullseye on a mark with its siblings
+// stepping out symmetrically, and lands every band edge halfway between two
+// marks, so no mark is ever on the fence.
+//
+// The wedge spans 5·BAND_SLOTS marks, so it covers 5·BAND_SLOTS/(TICKS-1) of the
+// dial — here 15/62 ≈ 24%, just under a quarter. To keep that share at-or-under
+// 25% with equal sections, satisfy TICKS-1 ≥ 20·BAND_SLOTS (raise TICKS to widen
+// the gaps and shrink the wedge's share; raise BAND_SLOTS to fatten the bands).
+const BAND_SLOTS = 3;
+
+// Band half-widths, in 0..100 scale units, derived from the above so the slot
+// counts stay exact whatever TICKS/BAND_SLOTS are. A guess within BAND_4 of the
+// centre scores 4, within BAND_3 scores 3, within BAND_2 scores 2, and anything
+// beyond misses. Distance is measured around the dial as a circle (see
+// circDist), so a wedge crowding one end wraps its far bands onto the other.
+const BAND_4 = (BAND_SLOTS / 2) * TICK_STEP;
+const BAND_3 = ((3 * BAND_SLOTS) / 2) * TICK_STEP;
+const BAND_2 = ((5 * BAND_SLOTS) / 2) * TICK_STEP;
 
 // The most a team can score in a single round (a bullseye). Used to tell when a
 // lead is already out of reach, so a decided game ends at once instead of playing
@@ -185,10 +204,76 @@ function tickIndex(p) {
   return clampInt(p / TICK_STEP, 0, TICKS - 1);
 }
 
+// SEAM_SLOTS — the blind gap, in marks, bridging the dial's two ends.
+//
+// The dial scores as a loop because the real wheel carries a second, identical
+// copy of the wedge 180° away: you see a hair under half the wheel, so as one
+// target leaves the top the twin arrives and the visible 0..100 face joins back
+// onto itself. The join isn't flush — one mark is trimmed off each visible end
+// (the very trim EDGE_MARGIN lifts the corners by), and those two half-trims meet
+// around the back as a single SEAM_SLOTS-wide blind gap.
+//
+// Its width is the crux of the whole design. It must be at least half the
+// bullseye (1.5 marks) so a corner target's wrapped-around half is swallowed
+// whole — a 4 hugging one end is never echoed onto the other; yet narrower than
+// the full bullseye (3 marks) so the 4 can never fit inside the gap and vanish. 2
+// sits in that window, and because the target always snaps to a mark — never the
+// gap's centre — the worst case is a clean half-4 hugging one end, never less.
+const SEAM_SLOTS = 2;
+const DIAL_CIRC = 100 + SEAM_SLOTS * TICK_STEP; // visible 0..100 + the blind seam
+
+/**
+ * Distance between two 0..100 positions, measured around the dial as a loop (see
+ * DIAL_CIRC): a wedge crowding one end spills its far side onto the other, yet no
+ * mark is ever more than DIAL_CIRC/2 away.
+ *
+ * @param {number} a @param {number} b @returns {number}
+ */
+function circDist(a, b) {
+  const d = Math.abs(a - b);
+  return Math.min(d, DIAL_CIRC - d);
+}
+
+/**
+ * The visible [lo, hi] sub-segments of a band spanning [a, b] once the dial is
+ * treated as a loop: any part beyond either end reappears at the opposite end.
+ * Bands are far shorter than the dial, so this yields at most two segments.
+ *
+ * @param {number} a @param {number} b @returns {[number, number][]}
+ */
+function wrapSegments(a, b) {
+  /** @type {[number, number][]} */
+  const out = [];
+  for (let k = -1; k <= 1; k++) {
+    const lo = Math.max(0, a + DIAL_CIRC * k);
+    const hi = Math.min(100, b + DIAL_CIRC * k);
+    if (hi > lo) out.push([lo, hi]);
+  }
+  return out;
+}
+
+/**
+ * The on-dial position a point p maps to once the dial loops, as a 0- or 1-entry
+ * array. A point on the visible face returns itself; one that wrapped past an end
+ * returns where it reappears on the far side; one that fell into the hidden seam
+ * returns nothing. Never more than one, since the loop runs longer than the
+ * visible face — successive wraps sit DIAL_CIRC apart, wider than 0..100.
+ *
+ * @param {number} p @returns {number[]}
+ */
+function wrapPoints(p) {
+  const out = [];
+  for (let k = -1; k <= 1; k++) {
+    const q = p + DIAL_CIRC * k;
+    if (q >= 0 && q <= 100) out.push(q);
+  }
+  return out;
+}
+
 /**
  * Points for landing `dist` scale-units away from the target centre.
  *
- * @param {number} dist  Absolute distance on the 0..100 scale.
+ * @param {number} dist  Around-the-dial distance (see circDist).
  * @returns {0 | 2 | 3 | 4}
  */
 function scoreFor(dist) {
@@ -213,10 +298,14 @@ function scoreLabel(pts) {
 }
 
 /**
- * A random target centre, sitting on any mark across the whole dial — the ends
- * included. A target near a corner pushes part of its wedge off the dial, so
- * that low-scoring side simply isn't reachable this round; the bullseye itself
- * can sit right in the corner.
+ * A random target centre, on any mark across the whole dial — the two ends
+ * included, so every orientation is equally likely and no mark is a more or less
+ * likely bullseye than any other. Because the dial scores as a loop (see
+ * circDist), a target near an end wraps the far side of its wedge — its outer 2
+ * and 3 bands — onto the opposite end. A target right in a corner shows half its
+ * bullseye hugging that end, the other half tucked into the blind seam: the 4 is
+ * never echoed onto the far end, and, the seam being narrower than the bullseye,
+ * never hidden entirely.
  *
  * @returns {number} A mark position in [0, 100].
  */
@@ -231,21 +320,32 @@ function teamColor(i) {
 
 // --- geometry (DOM-free) ---------------------------------------------------
 
-// SVG viewBox + dial layout. The dial is a filled half-disc: the needle pivots
-// at (CX, CY) on the flat (bottom) edge, and the arc sweeps the upper half from
-// p=0 (far left) to p=100 (far right). The chunky hub knob at the pivot is an
-// HTML button overlaid on top (see .dial__knob) — it's both the needle's anchor
-// and the game's one control, so a step advances by pressing it. VBH leaves a
-// little room below the pivot for that knob and the frame, so the dial fits.
+// SVG viewBox + dial layout. The dial is a filled fan, a hair shy of a true
+// half-disc: the needle pivots at (CX, CY), and the arc sweeps the top from p=0
+// (far left) to p=100 (far right). The chunky hub knob at the pivot is an HTML
+// button overlaid on top (see .dial__knob) — it's both the needle's anchor and
+// the game's one control, so a step advances by pressing it. VBH leaves a little
+// room below the pivot for that knob and the frame, so the dial fits.
 const VBW = 320;
 const VBH = 200;
 const CX = 160;
 const CY = 160;
 const R = 140; // disc radius
 
+// The arc stops short of horizontal at each end, lifting the two corners off the
+// baseline — so the face reads as the front of a wheel that carries on below, not
+// a flat half-disc protractor. That lift isn't arbitrary: it's half the blind
+// seam (SEAM_SLOTS marks) surfacing at each visible end, so the slot you see
+// lifted off the baseline is exactly the one the scoring wraps around. EDGE_MARGIN
+// is that per-end trim in degrees; the whole 0..100 scale then sweeps ARC_SPAN, a
+// touch under 180°. Drawing only — every mark stays playable, the scoring is
+// untouched.
+const EDGE_MARGIN = (SEAM_SLOTS / 2) * (180 / (TICKS - 1));
+const ARC_SPAN = 180 - 2 * EDGE_MARGIN;
+
 /** @param {number} p @returns {number} Standard (y-up) angle in degrees for scale position p. */
 function posAngle(p) {
-  return 180 - (p / 100) * 180;
+  return 180 - EDGE_MARGIN - (p / 100) * ARC_SPAN;
 }
 
 /** @param {number} p @param {number} radius @returns {{ x: number, y: number }} */
@@ -256,7 +356,7 @@ function ptAt(p, radius) {
 
 /** @param {number} p @returns {number} Degrees to rotate an upright needle to point at p. */
 function needleRot(p) {
-  return -90 + 1.8 * p;
+  return 90 - posAngle(p);
 }
 
 /** @param {number} n @returns {string} */
@@ -518,7 +618,7 @@ function buildDial(opts) {
 
   // Dial body: a smooth, blank half-disc. No tick marks are drawn — the surface
   // looks like a continuous scale, but the needle still snaps (and buzzes) onto
-  // one of the 21 marks, so the accuracy is felt rather than seen. The face is
+  // one of the 63 marks, so the accuracy is felt rather than seen. The face is
   // white while the target wedge is on show; when it's hidden the fill becomes a
   // light-blue "shield", standing in for the physical screen flipped down over
   // the answer.
@@ -547,30 +647,35 @@ function buildDial(opts) {
       [t + BAND_4, t + BAND_3, 'b3'],
       [t + BAND_3, t + BAND_2, 'b2'],
     ];
-    // A target near a corner runs part of its wedge off the dial: clip each band
-    // to [0, 100] and drop any that lands entirely outside, so nothing spills
-    // past the rim.
+    // The dial is the front of a full circle, so a band straying past an end
+    // wraps onto the opposite end (see wrapSegments / circDist). Each band can
+    // therefore draw as up to two slices — its main body plus a wrapped sliver.
     for (const [a, b, cls] of bands) {
-      const lo = Math.max(0, a);
-      const hi = Math.min(100, b);
-      if (hi <= lo) continue;
-      g.append(svgEl('path', { d: sector(lo, hi), class: `dial__band dial__band--${cls}` }));
+      for (const [lo, hi] of wrapSegments(a, b)) {
+        g.append(svgEl('path', { d: sector(lo, hi), class: `dial__band dial__band--${cls}` }));
+      }
     }
     const lr = R * 0.9; // sit the point numbers right out near the rim
+    const c3 = (BAND_4 + BAND_3) / 2; // centre of each 3-band
+    const c2 = (BAND_3 + BAND_2) / 2; // centre of each 2-band
     /** @type {[number, string][]} */
     const labels = [
       [t, '4'],
-      [t - 5, '3'],
-      [t + 5, '3'],
-      [t - 10, '2'],
-      [t + 10, '2'],
+      [t - c3, '3'],
+      [t + c3, '3'],
+      [t - c2, '2'],
+      [t + c2, '2'],
     ];
+    // Each band's number sits at its centre, wrapped onto the dial the same way
+    // the bands are — so a 2 or 3 whose band has spilled across the seam gets its
+    // number on the far end too (wrapPoints drops any that land in the seam).
     for (const [p, txt] of labels) {
-      if (p < 0 || p > 100) continue; // its band ran off the dial — no number to show
-      const c = ptAt(p, lr);
-      const tn = svgEl('text', { x: f(c.x), y: f(c.y), class: 'dial__pts' });
-      tn.textContent = txt;
-      g.append(tn);
+      for (const wp of wrapPoints(p)) {
+        const c = ptAt(wp, lr);
+        const tn = svgEl('text', { x: f(c.x), y: f(c.y), class: 'dial__pts' });
+        tn.textContent = txt;
+        g.append(tn);
+      }
     }
     svg.append(g);
   }
@@ -619,7 +724,9 @@ function buildDial(opts) {
       let ang = (Math.atan2(CY - vy, vx - CX) * 180) / Math.PI;
       // Below the pivot the angle goes negative; clamp to the nearest end.
       if (ang < 0) ang = vx < CX ? 180 : 0;
-      return snapToTick(((180 - ang) / 180) * 100);
+      // Invert posAngle so the needle points at the finger across the trimmed
+      // arc; angles past either lifted end fall outside [0,100] and snap clamps.
+      return snapToTick(((180 - EDGE_MARGIN - ang) / ARC_SPAN) * 100);
     };
 
     let lastTick = tickIndex(current);
@@ -708,7 +815,7 @@ function lockGuess() {
   const round = state.round;
   if (!round) return;
   round.guess = state.needle;
-  const pts = scoreFor(Math.abs(state.needle - round.target));
+  const pts = scoreFor(circDist(state.needle, round.target));
   state.scores[state.activeTeam] += pts;
   state.lastPoints = pts;
   state.roundsPlayed += 1;
@@ -1116,4 +1223,4 @@ load();
 render();
 
 // Exported for the headless simulation/tests. Harmless in the browser.
-export { scoreFor, scoreLabel, randTarget, posAngle, needleRot, sector, SPECTRUMS };
+export { scoreFor, scoreLabel, circDist, randTarget, posAngle, needleRot, sector, SPECTRUMS };
