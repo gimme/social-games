@@ -31,6 +31,11 @@
   min-height: 0;
   align-items: center;
   justify-content: center;
+  /* The play surface is a game graphic, not a document: a slow press-and-hold
+     on the dial must not be read as a text-selection gesture and highlight an
+     overlaid label (e.g. a spectrum end word), which would fight the drag. */
+  user-select: none;
+  -webkit-user-select: none;
 }
 
 /* The dial fills the viewport while holding the graphic's 320×200 ratio: full
