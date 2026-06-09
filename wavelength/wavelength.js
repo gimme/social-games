@@ -705,10 +705,10 @@ function buildDial(opts) {
   if (opts.needle != null) {
     needle = svgEl('g', { class: 'dial__needle' });
     needle.append(
-      svgEl('line', { x1: CX, y1: CY, x2: CX, y2: CY - (R - 4), class: 'dial__needle-edge' }),
+      svgEl('line', { x1: CX, y1: CY, x2: CX, y2: CY - (R - 12), class: 'dial__needle-edge' }),
     );
     needle.append(
-      svgEl('line', { x1: CX, y1: CY, x2: CX, y2: CY - (R - 4), class: 'dial__needle-line' }),
+      svgEl('line', { x1: CX, y1: CY, x2: CX, y2: CY - (R - 12), class: 'dial__needle-line' }),
     );
     svg.append(needle);
   }
@@ -1134,11 +1134,11 @@ function renderGuess() {
   if (!state.round) return renderHome();
 
   // The team swings the needle (drag anywhere on the dial) to the Psychic's clue,
-  // then presses the knob to lock it in.
+  // then presses the knob to guess.
   return renderPlay({
     showWedge: false,
-    knobLabel: 'Lock',
-    knobAria: 'Lock in your guess',
+    knobLabel: 'Guess',
+    knobAria: 'Submit your guess',
     onKnob: () => lockGuess(),
   });
 }
