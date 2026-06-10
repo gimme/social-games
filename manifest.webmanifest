@@ -5,7 +5,7 @@
   "description": "Pass-the-phone party games. No setup, no accounts — just press play.",
   "start_url": "./",
   "scope": "./",
-  "display": "standalone",
+  "display": "fullscreen",
   "background_color": "#0f1220",
   "theme_color": "#0f1220",
   "categories": ["games", "entertainment"],

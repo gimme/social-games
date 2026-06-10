@@ -1,7 +1,13 @@
 .game {
   max-width: var(--max-width);
   margin: 0 auto;
-  padding: var(--space-6) var(--space-4) var(--space-8);
+  /* Installed fullscreen, the page reaches the real screen edges — keep the
+     content out of the camera cutout and gesture areas (the play screens
+     below already do the same). */
+  padding: max(var(--space-6), env(safe-area-inset-top))
+    max(var(--space-4), env(safe-area-inset-right))
+    max(var(--space-8), env(safe-area-inset-bottom))
+    max(var(--space-4), env(safe-area-inset-left));
 }
 
 .screen {
