@@ -37,5 +37,15 @@
     </main>
 
     <script type="module" src="hub.js"></script>
+    <script type="module">
+      // Offline copy of the whole site — see sw.js for the update story.
+      // updateViaCache: 'none' makes the browser check sw.js and the games.js
+      // it imports for new versions straight from the server, not HTTP cache.
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker
+          .register('sw.js', { type: 'module', updateViaCache: 'none' })
+          .catch(() => {}); // a browser without module workers — site stays online-only
+      }
+    </script>
   </body>
 </html>

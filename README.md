@@ -40,6 +40,7 @@ without touching anything else.
 index.html         the hub / home page
 hub.js, hub.css    renders the list of games, split into Featured / How to play
 games.js           the one place the hub lists its games and guides
+sw.js              service worker: keeps an offline copy of the whole site
 shared/tokens.css  shared theme (colors, spacing) — optional for a game to use
 shared/guide.css   shared styling for the how-to-play guide pages
 impostor/          a self-contained game (folder name = its URL)
@@ -53,6 +54,14 @@ jsconfig.json      editor type-checking for the plain JS (no build, just hints)
 
 Types are checked in your editor via `// @ts-check` + JSDoc comments and
 `jsconfig.json`. This is purely an editor aid — nothing is compiled.
+
+Offline support comes from `sw.js`, a service worker that precaches the hub and
+every folder listed in `games.js`, then answers every request **network-first**:
+while online you always see the latest deploy (the cache is only a fallback for
+bad or missing signal), and once a device has opened the hub, the whole site
+keeps working with no connection. Adding a game needs no service-worker change —
+the games.js entry is enough. The `VERSION` constant in `sw.js` only needs a
+bump to purge files you deleted or renamed.
 
 ## Run it locally
 
