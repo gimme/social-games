@@ -8,12 +8,12 @@
 .game {
   max-width: var(--max-width);
   margin: 0 auto;
-  /* Installed fullscreen, the page reaches the real screen edges — keep the
-     content out of the camera cutout and gesture areas. */
-  padding: max(var(--space-6), env(safe-area-inset-top))
-    max(var(--space-4), env(safe-area-inset-right))
-    max(var(--space-8), env(safe-area-inset-bottom))
-    max(var(--space-4), env(safe-area-inset-left));
+  /* Keep the content out of the camera cutout and gesture areas when the
+     viewport reaches the real screen edges. */
+  padding: max(var(--space-6), var(--safe-top))
+    max(var(--space-4), var(--safe-right))
+    max(var(--space-8), var(--safe-bottom))
+    max(var(--space-4), var(--safe-left));
 }
 
 .screen__title {
