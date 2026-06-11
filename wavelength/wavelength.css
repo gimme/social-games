@@ -1,13 +1,13 @@
 .game {
   max-width: var(--max-width);
   margin: 0 auto;
-  /* Keep the content out of the camera cutout and gesture areas when the
-     viewport reaches the real screen edges (the play screens below do the
-     same). */
-  padding: max(var(--space-6), var(--safe-top))
-    max(var(--space-4), var(--safe-right))
-    max(var(--space-8), var(--safe-bottom))
-    max(var(--space-4), var(--safe-left));
+  /* Installed fullscreen, the page reaches the real screen edges — keep the
+     content out of the camera cutout and gesture areas (the play screens
+     below already do the same). */
+  padding: max(var(--space-6), env(safe-area-inset-top))
+    max(var(--space-4), env(safe-area-inset-right))
+    max(var(--space-8), env(safe-area-inset-bottom))
+    max(var(--space-4), env(safe-area-inset-left));
 }
 
 .screen {
@@ -24,10 +24,10 @@
 .game:has(.screen--play) {
   max-width: none;
   height: 100dvh;
-  padding: max(var(--space-2), var(--safe-top))
-    max(var(--space-3), var(--safe-right))
-    max(var(--space-2), var(--safe-bottom))
-    max(var(--space-3), var(--safe-left));
+  padding: max(var(--space-2), env(safe-area-inset-top))
+    max(var(--space-3), env(safe-area-inset-right))
+    max(var(--space-2), env(safe-area-inset-bottom))
+    max(var(--space-3), env(safe-area-inset-left));
   overflow: hidden;
   display: flex;
 }
@@ -51,19 +51,6 @@
   width: min(100%, calc((100dvh - 1.5rem) * 1.6));
   aspect-ratio: 320 / 200;
   max-height: 100%;
-}
-
-/* Installed fullscreen, dvh shrinks for the moment a swiped-in system bar
-   overlays the app, resizing the dial mid-game. Size to the large viewport
-   (bars retracted — the steady state) so the dial holds still. */
-@media (display-mode: fullscreen) {
-  .game:has(.screen--play) {
-    height: 100lvh;
-  }
-
-  .dial {
-    width: min(100%, calc((100lvh - 1.5rem) * 1.6));
-  }
 }
 
 .screen__title {
