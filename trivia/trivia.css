@@ -142,24 +142,31 @@
 }
 
 /* A visual prompt (a flag): a crisp SVG <img>, and its own tap target for
-   full-screen. The image keeps its true aspect ratio, with a hairline frame so
-   white-edged flags read against the dark card. */
-/* The image box has an explicit size — the flag SVGs are viewBox-only (no
-   width/height), so an auto-sized <img> would collapse to nothing. A fixed 4:3
-   box with object-fit gives them a definite size to fill. */
+   full-screen. Each flag keeps its own official aspect ratio (the US is wide
+   10:19, Switzerland square, Nepal a tall pennant), so the image is sized to
+   its intrinsic ratio inside a bounding box rather than forced into one shape.
+   A hairline frame hugs the flag so white-edged ones read against the dark
+   card. */
 .qcard__glyph {
-  width: 10rem;
-  aspect-ratio: 4 / 3;
   display: flex;
   cursor: pointer;
 }
 
 .qcard__glyph img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
+  max-width: 12rem;
+  max-height: 7.5rem;
+  width: auto;
+  height: auto;
   border: 1px solid var(--border);
   border-radius: 6px;
+}
+
+/* A non-rectangular flag (Nepal) carries its own edge, so the box frame is
+   dropped — otherwise it floats as a square around the pennant. */
+.qcard__glyph img.flag--shaped,
+.present__glyph img.flag--shaped {
+  border: none;
+  border-radius: 0;
 }
 
 .qcard__glyph:active img {
@@ -314,15 +321,16 @@
 }
 
 .present__glyph {
-  width: min(92vw, 110vh);
-  aspect-ratio: 4 / 3;
   display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .present__glyph img {
-  width: 100%;
-  height: 100%;
-  object-fit: contain;
+  max-width: 92vw;
+  max-height: 84vh;
+  width: auto;
+  height: auto;
   border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 10px;
   box-shadow: var(--shadow);

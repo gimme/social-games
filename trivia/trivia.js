@@ -17,10 +17,11 @@
  * Tap the card to reveal the answer (tap again for the next); tap a flag to
  * throw it full-screen for the table.
  *
- * Flags are real SVG files in ./flags/ (the flag-icons set — see flags/
- * CREDITS.md), shown with an <img> so they stay crisp at any size and look the
- * same on every phone. They load on demand; the service worker caches each one
- * as it's viewed, so a flags round you've played once also works offline.
+ * Flags are real SVG files in ./flags/ (each in its country's official aspect
+ * ratio — see flags/CREDITS.md), shown with an <img> so they stay crisp at any
+ * size and look the same on every phone. They load on demand; the service
+ * worker caches each one as it's viewed, so a flags round you've played once
+ * also works offline.
  *
  * Self-contained: this game imports nothing and is the only script on its page.
  * The text bank lives in this file so the service worker (which precaches
@@ -753,6 +754,9 @@ function renderCard() {
     const img = /** @type {HTMLImageElement} */ (el('img'));
     img.src = `flags/${q.code}.svg`;
     img.alt = '';
+    // Nepal is the only non-rectangular flag; its own pennant edge stands in
+    // for the frame, so a box border would just float around it.
+    if (q.code === 'np') img.classList.add('flag--shaped');
     glyph.append(img);
     glyph.setAttribute('role', 'button');
     glyph.setAttribute('tabindex', '0');
@@ -844,6 +848,7 @@ function renderPresent() {
   const img = /** @type {HTMLImageElement} */ (el('img'));
   img.src = `flags/${q.code}.svg`;
   img.alt = '';
+  if (q.code === 'np') img.classList.add('flag--shaped'); // see renderPlay: non-rectangular
   glyph.append(img);
   overlay.append(glyph);
   makeTappable(overlay, () => {
