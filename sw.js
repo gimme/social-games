@@ -66,7 +66,9 @@ const HUB_FILES = [
 /**
  * Everything worth keeping offline, derived from the games.js registry plus
  * the repo's folder convention: every folder serves index.html at its path,
- * and a phone-run game adds <id>.css, <id>.js and how-to-play.html. A
+ * and a phone-run game adds <id>.css, <id>.js and how-to-play.html — plus an
+ * optional <id>.data.js, the data module a game splits its content into when
+ * inlining it would bloat the script (Trivia's question bank, say). A
  * conventional file a game doesn't have just 404s and is skipped, so nothing
  * here needs touching when a game is added — its games.js entry is enough.
  */
@@ -75,7 +77,7 @@ function offlineFiles() {
   for (const { id, kind, path } of games) {
     files.push(path);
     if (kind === 'game') {
-      files.push(`${path}${id}.css`, `${path}${id}.js`, `${path}how-to-play.html`);
+      files.push(`${path}${id}.css`, `${path}${id}.js`, `${path}${id}.data.js`, `${path}how-to-play.html`);
     }
   }
   return files;
