@@ -32,7 +32,11 @@ const SECTIONS = [
   },
 ];
 
-/** Build one game/guide card (an <li>). */
+/**
+ * Build one game/guide card (an <li>).
+ *
+ * @param {import('./games.js').Game} game
+ */
 function card(game) {
   const link = el('a', 'game-card__link');
   /** @type {HTMLAnchorElement} */ (link).href = game.path;
