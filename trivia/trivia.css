@@ -198,24 +198,28 @@
   text-align: center;
 }
 
-/* --- Difficulty meter --------------------------------------------------- */
-.meter {
-  display: inline-flex;
-  gap: 0.3rem;
-  align-items: center;
+/* --- Difficulty badge --------------------------------------------------- */
+/* A small colour-graded pill, easiest (Basic, green) through to hardest
+   (Impossible, violet), so the host reads the tier of the current question at
+   a glance. The colour carries the meaning; the outline matches the text. */
+.diff {
   flex: none;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.68rem;
+  font-weight: 700;
+  padding: 0.12rem 0.5rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  color: var(--text-muted);
 }
 
-.meter__dot {
-  width: 0.5rem;
-  height: 0.5rem;
-  border-radius: 50%;
-  background: var(--border);
-}
-
-.meter__dot--on {
-  background: var(--warning);
-}
+.diff--basic { color: #4fd6a0; }
+.diff--easy { color: #8fd14f; }
+.diff--med { color: #ffc857; }
+.diff--hard { color: #ff9f45; }
+.diff--expert { color: #ff5d6c; }
+.diff--impossible { color: #b98cff; }
 
 /* --- Play: the live console (categories + difficulty) ------------------- */
 .deck {
