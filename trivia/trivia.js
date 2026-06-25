@@ -186,7 +186,7 @@ function load() {
   const validDiffs = new Set(DIFFICULTIES.map((d) => d.id));
   if (Array.isArray(data.diffs)) {
     const diffs = /** @type {Difficulty[]} */ (data.diffs).filter((id) => validDiffs.has(id));
-    if (diffs.length) state.diffs = new Set(diffs);
+    state.diffs = new Set(diffs);
   }
 }
 
@@ -246,10 +246,9 @@ function difficultyBadge(d) {
  *
  * @param {{ id: string, label: string }[]} options
  * @param {Set<string>} selected
- * @param {{ minOne?: boolean }} [opts]
  * @returns {HTMLElement}
  */
-function chipRow(options, selected, opts) {
+function chipRow(options, selected) {
   const row = el('div', 'chips');
   for (const o of options) {
     const on = selected.has(o.id);
@@ -258,7 +257,6 @@ function chipRow(options, selected, opts) {
     chip.setAttribute('aria-pressed', String(on));
     chip.addEventListener('click', () => {
       if (selected.has(o.id)) {
-        if (opts?.minOne && selected.size === 1) return;
         selected.delete(o.id);
       } else {
         selected.add(o.id);
@@ -356,14 +354,18 @@ function renderCard() {
   });
 
   if (!q) {
-    // No question yet. Steer the host: pick a category if nothing feeds the
-    // deck, otherwise just tap to deal the first one.
+    // No question yet. Steer the host: point at whichever selection is empty
+    // when nothing feeds the deck, otherwise just tap to deal the first one.
     const content = el('div', 'qcard__content');
-    const hint = eligiblePool().length === 0
+    const hint = state.cats.size === 0
       ? 'Pick a category to begin.'
-      : state.asked === 0
-        ? 'Tap for your first question.'
-        : 'Tap for the next question.';
+      : state.diffs.size === 0
+        ? 'Pick a difficulty to begin.'
+        : eligiblePool().length === 0
+          ? 'No questions match — widen the selection.'
+          : state.asked === 0
+            ? 'Tap for your first question.'
+            : 'Tap for the next question.';
     content.append(el('p', 'qcard__q', hint));
     card.append(content);
     return card;
@@ -455,12 +457,12 @@ function renderDeck() {
   );
   deck.append(catGroup);
 
-  // Difficulty — multi-select, keep at least one on.
+  // Difficulty — multi-select; like categories, it can sit empty.
   const diffGroup = el('div', 'deck__group');
   const diffHead = el('div', 'deck__head');
   diffHead.append(el('span', 'deck__label', 'Difficulty'));
   diffGroup.append(diffHead);
-  diffGroup.append(chipRow(DIFFICULTIES, /** @type {Set<string>} */ (state.diffs), { minOne: true }));
+  diffGroup.append(chipRow(DIFFICULTIES, /** @type {Set<string>} */ (state.diffs)));
   deck.append(diffGroup);
 
   return deck;
