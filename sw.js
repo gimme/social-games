@@ -24,7 +24,7 @@ import { games } from './games.js';
  */
 
 /** Bump only to discard the old cache wholesale (e.g. after deleting a game). */
-const VERSION = 1;
+const VERSION = 2;
 const CACHE = `social-games-v${VERSION}`;
 
 /** How long the network gets before a cached copy wins (slow-signal UX). */

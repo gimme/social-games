@@ -17,13 +17,13 @@ The home page has two sections: **Featured** games the phone actually runs, and
 | --- | --- | --- |
 | 🕵️ Impostor | 3+ | Players fill the word pool; everyone gets the same secret word — except the impostor. |
 | 🎚️ Wavelength | 2+ | A Psychic clues a target hidden on a half-moon dial; the team swings the needle to find it and scores by how close they land. |
+| 🧠 Trivia | 2+ | A host-driven question deck: deal from a mix, a single category, or a flags round and switch on the fly. The phone feeds questions (answers a tap away); you run the game — knockout, streaks, or just for fun. |
 
-Plus **how-to-play guides** for 16 more party games — Impostor Q&A, Just One,
-Werewords, Who Am I?, Heads Up, Family Feud, 8 Words, Word Chain Link, Who Knows
-Most?, Don't Copy My Answer, I Can Name…, I'm Going Camping, Mind Meld, Top 5
-Picks, Form a Word, and the 12345678 Rhythm challenge. These are
-rules-and-refreshers cards; some are natural candidates to grow into full
-phone-run games later.
+Plus **how-to-play guides** for 15 more party games — Impostor Q&A, Just One,
+Werewords, Who Am I?, Heads Up, Family Feud, 8 Words, Word Chain Link, Don't Copy
+My Answer, I Can Name…, I'm Going Camping, Mind Meld, Top 5 Picks, Form a Word,
+and the 12345678 Rhythm challenge. These are rules-and-refreshers cards; some are
+natural candidates to grow into full phone-run games later.
 
 ## How it's built
 

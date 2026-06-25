@@ -44,6 +44,15 @@ export const games = [
     players: '2+ players',
     path: 'wavelength/',
   },
+  {
+    id: 'trivia',
+    kind: 'game',
+    name: 'Trivia',
+    tagline: 'A trivia deck you steer — run a category, fire off a flags round, or wing it. You host; the phone deals.',
+    emoji: '🧠',
+    players: '2+ players',
+    path: 'trivia/',
+  },
 
   // --- How-to-play guides (reference only, for now) ------------------------
   {
@@ -117,15 +126,6 @@ export const games = [
     emoji: '🔗',
     players: '1+ players',
     path: 'word-chain-link/',
-  },
-  {
-    id: 'who-knows-most',
-    kind: 'guide',
-    name: 'Who Knows Most?',
-    tagline: 'Buzz-in trivia knockout — two right and you’re through the round.',
-    emoji: '🧠',
-    players: '3+ players',
-    path: 'who-knows-most/',
   },
   {
     id: 'dont-copy',

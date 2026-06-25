@@ -1,0 +1,334 @@
+/*
+ * Trivia — a host-driven question deck.
+ *
+ * Standalone like every game's stylesheet: it leans on shared/tokens.css for
+ * the palette and the .btn family, and defines its own layout here. Nothing
+ * couples it to another game.
+ */
+
+.game {
+  max-width: var(--max-width);
+  margin: 0 auto;
+  /* Installed fullscreen, the page reaches the real screen edges — keep the
+     content out of the camera cutout and gesture areas. */
+  padding: max(var(--space-6), env(safe-area-inset-top))
+    max(var(--space-4), env(safe-area-inset-right))
+    max(var(--space-8), env(safe-area-inset-bottom))
+    max(var(--space-4), env(safe-area-inset-left));
+}
+
+.screen {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.screen__title {
+  font-size: 1.9rem;
+}
+
+.screen__lede {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.screen__howto {
+  align-self: flex-start;
+  margin-top: calc(-1 * var(--space-2));
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 600;
+  font-size: 0.95rem;
+}
+
+.screen__howto:hover {
+  text-decoration: underline;
+}
+
+/* --- Play: top bar ------------------------------------------------------ */
+.topbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.topbar__back,
+.topbar__skip {
+  appearance: none;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+.topbar__back:hover,
+.topbar__skip:hover {
+  color: var(--text);
+}
+
+.topbar__skip:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+/* A quiet session tally between the two buttons. */
+.topbar__count {
+  color: var(--text-muted);
+  opacity: 0.6;
+  font-size: 0.8rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* --- Play: the question card -------------------------------------------- */
+/* The whole card is the tap target: first tap reveals, next tap deals again.
+   A fixed height with the prompt centred and a reserved answer slot keeps the
+   controls below from shifting when the answer appears or the question changes. */
+.qcard {
+  display: flex;
+  flex-direction: column;
+  height: 15rem;
+  padding: var(--space-4) var(--space-5);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-card);
+  box-shadow: var(--shadow);
+  cursor: pointer;
+  user-select: none;
+}
+
+.qcard:active {
+  transform: translateY(1px);
+}
+
+.qcard:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.qcard__meta {
+  flex: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.qcard__cat {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.78rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.qcard__content {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow-y: auto;
+  text-align: center;
+}
+
+.qcard__q {
+  margin: 0;
+  font-size: 1.4rem;
+  font-weight: 600;
+  line-height: 1.3;
+}
+
+/* A visual prompt (a flag): a crisp SVG <img>, and its own tap target for
+   full-screen. The image keeps its true aspect ratio, with a hairline frame so
+   white-edged flags read against the dark card. */
+/* The image box has an explicit size — the flag SVGs are viewBox-only (no
+   width/height), so an auto-sized <img> would collapse to nothing. A fixed 4:3
+   box with object-fit gives them a definite size to fill. */
+.qcard__glyph {
+  width: 10rem;
+  aspect-ratio: 4 / 3;
+  display: flex;
+  cursor: pointer;
+}
+
+.qcard__glyph img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
+.qcard__glyph:active img {
+  transform: scale(0.98);
+}
+
+.qcard__glyph:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+
+/* The reveal slot: a FIXED height, so flipping between the hint and the answer
+   never changes its size or nudges anything below. */
+.qcard__answer {
+  flex: none;
+  height: 3.75rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--border);
+  overflow: hidden;
+}
+
+.qcard__ahint {
+  color: var(--text-muted);
+  font-size: 0.95rem;
+}
+
+.qcard__a {
+  font-size: 1.35rem;
+  font-weight: 700;
+  color: var(--success);
+  line-height: 1.2;
+  text-align: center;
+}
+
+/* --- Difficulty meter --------------------------------------------------- */
+.meter {
+  display: inline-flex;
+  gap: 0.3rem;
+  align-items: center;
+  flex: none;
+}
+
+.meter__dot {
+  width: 0.5rem;
+  height: 0.5rem;
+  border-radius: 50%;
+  background: var(--border);
+}
+
+.meter__dot--on {
+  background: var(--warning);
+}
+
+/* --- Play: the live console (categories + difficulty) ------------------- */
+.deck {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  margin-top: var(--space-2);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--border);
+}
+
+.deck__group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.deck__head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+}
+
+.deck__label {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-size: 0.72rem;
+  font-weight: 700;
+  color: var(--text-muted);
+}
+
+.deck__quick {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.linkbtn {
+  appearance: none;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font-size: 0.82rem;
+  font-weight: 700;
+}
+
+.linkbtn:hover {
+  text-decoration: underline;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.chip {
+  appearance: none;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-card);
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-weight: 600;
+  transition: transform 0.04s ease, background 0.15s ease, color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.chip:active {
+  transform: translateY(1px);
+}
+
+.chip--on {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+
+/* --- Full-screen visual (shown to the table) ---------------------------- */
+.present {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-5);
+  background: var(--bg);
+  cursor: pointer;
+}
+
+.present__glyph {
+  width: min(92vw, 110vh);
+  aspect-ratio: 4 / 3;
+  display: flex;
+}
+
+.present__glyph img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 10px;
+  box-shadow: var(--shadow);
+}
+
+.present__close {
+  position: absolute;
+  top: max(var(--space-4), env(safe-area-inset-top));
+  right: max(var(--space-4), env(safe-area-inset-right));
+  color: var(--text-muted);
+  font-size: 1.5rem;
+  line-height: 1;
+}
