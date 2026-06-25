@@ -179,6 +179,30 @@
   border-radius: 6px;
 }
 
+/* Shown when a selection has been fully seen: a clear opt-in to deal its
+   questions again (the deck never recycles on its own). A pill that echoes the
+   chips below, sitting just under the spent-state message. */
+.qcard__replay {
+  appearance: none;
+  margin-top: var(--space-3);
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--accent);
+  border-radius: 999px;
+  background: none;
+  color: var(--accent);
+  font-size: 0.9rem;
+  font-weight: 700;
+}
+
+.qcard__replay:active {
+  transform: translateY(1px);
+}
+
+.qcard__replay:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 /* The reveal slot: a FIXED height, so flipping between the hint and the answer
    never changes its size or nudges anything below. */
 .qcard__answer {

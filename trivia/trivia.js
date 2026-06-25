@@ -12,10 +12,11 @@
  * Steer it as you go: pick any mix of categories and difficulties, and the deck
  * draws from whatever's selected. It opens with nothing chosen and no question
  * on screen — pick a category to begin. Changing the selection never disturbs
- * the question on screen; it only shapes what comes next. Nothing repeats until
- * the whole selected pool has been seen this session, then it quietly recycles.
- * Tap the card to reveal the answer (tap again for the next); tap a flag to
- * throw it full-screen for the table.
+ * the question on screen; it only shapes what comes next. Nothing repeats this
+ * session, even as you switch the mix; when a selection has been fully seen the
+ * card says so and a tap starts just that selection over — the deck never
+ * recycles on its own. Tap the card to reveal the answer (tap again for the
+ * next); tap a flag to throw it full-screen for the table.
  *
  * Flags are real SVG files in ./flags/ (each in its country's official aspect
  * ratio — see flags/CREDITS.md), shown with an <img> so they stay crisp at any
@@ -106,21 +107,16 @@ function eligiblePool() {
 
 /**
  * Pick the next question. Nothing in the selected pool is dealt twice in a
- * session until the whole pool has been seen, at which point it recycles
- * (minus the current one, to avoid an immediate repeat). A light touch keeps
- * the difficulties from clumping. Returns null only if nothing is selected.
+ * session: once the whole pool has been seen this returns null and the deck
+ * stops — it never recycles on its own (the host taps Start over to deal the
+ * selection again). A light touch keeps the difficulties from clumping. Also
+ * returns null if nothing is selected or nothing matches.
  *
  * @returns {Question | null}
  */
 function pickNext() {
-  const pool = eligiblePool();
-  if (pool.length === 0) return null;
-
-  let fresh = pool.filter((q) => !state.seen.has(q));
-  if (fresh.length === 0) {
-    for (const q of pool) state.seen.delete(q); // whole pool seen — recycle it
-    fresh = state.current && pool.length > 1 ? pool.filter((q) => q !== state.current) : pool.slice();
-  }
+  let fresh = eligiblePool().filter((q) => !state.seen.has(q));
+  if (fresh.length === 0) return null; // nothing selected, no match, or all seen
 
   // Don't deal a third of the same tier in a row if another tier is available.
   const n = state.lastDiffs.length;
@@ -152,6 +148,19 @@ function deal(count = true) {
   if (count) state.asked += 1;
   state.lastDiffs.push(q.d);
   if (state.lastDiffs.length > 2) state.lastDiffs.shift();
+}
+
+/**
+ * Start the current selection over: forget that its questions have been seen so
+ * the deck can deal them again, then deal the first one. Only questions matching
+ * what's selected are cleared — anything seen under a category or tier you've yet
+ * to return to stays remembered, so switching back still won't repeat. The
+ * session tally keeps climbing; this is a fresh pass over the same pool, not a
+ * new session.
+ */
+function replaySelection() {
+  for (const q of eligiblePool()) state.seen.delete(q);
+  deal();
 }
 
 // --- persistence -----------------------------------------------------------
@@ -355,18 +364,37 @@ function renderCard() {
 
   if (!q) {
     // No question yet. Steer the host: point at whichever selection is empty
-    // when nothing feeds the deck, otherwise just tap to deal the first one.
+    // when nothing feeds the deck, say so when the selection has been fully
+    // seen (with a tap to replay it), otherwise just tap to deal the next one.
     const content = el('div', 'qcard__content');
+    const pool = eligiblePool();
+    const spent = pool.length > 0 && pool.every((p) => state.seen.has(p));
     const hint = state.cats.size === 0
       ? 'Pick a category to begin.'
       : state.diffs.size === 0
         ? 'Pick a difficulty to begin.'
-        : eligiblePool().length === 0
+        : pool.length === 0
           ? 'No questions match — widen the selection.'
-          : state.asked === 0
-            ? 'Tap for your first question.'
-            : 'Tap for the next question.';
+          : spent
+            ? "You've seen everything in this selection."
+            : state.asked === 0
+              ? 'Tap for your first question.'
+              : 'Tap for the next question.';
     content.append(el('p', 'qcard__q', hint));
+    if (spent) {
+      const replay = el('button', 'qcard__replay', 'Start over');
+      replay.setAttribute('type', 'button');
+      // Its own action; keep the tap/key off the card's deal handler.
+      replay.addEventListener('click', (e) => {
+        e.stopPropagation();
+        replaySelection();
+        render();
+      });
+      replay.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') e.stopPropagation();
+      });
+      content.append(replay);
+    }
     card.append(content);
     return card;
   }
