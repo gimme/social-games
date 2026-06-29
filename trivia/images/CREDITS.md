@@ -4,6 +4,7 @@
 
 - [**flags/**](flags/) — flagpedia.net / flagcdn.com, official aspect ratios. No attribution required.
 - [**animals/asian-elephant.jpg**](animals/asian-elephant.jpg) — Yathin S Krishnappa, CC BY-SA 3.0. [source](https://commons.wikimedia.org/wiki/File:Elephas_maximus_(Bandipur).jpg)
+- [**animals/red-panda.jpg**](animals/red-panda.jpg) — 27707 (Pixabay), CC0. [source](https://commons.wikimedia.org/wiki/File:Endangered_Red_Panda.jpg)
 - [**animals/penguin-range.png**](animals/penguin-range.png) — Phoenix_B_1of3, CC0. [source](https://commons.wikimedia.org/wiki/File:Penguin_range.png)
 - [**animals/polar-bear-range.svg**](animals/polar-bear-range.svg) — M.Bitton, CC BY-SA 3.0. [source](https://commons.wikimedia.org/wiki/File:Polar_bear_(range).svg)
 - [**animals/tiger-range.png**](animals/tiger-range.png) — BhagyaMani, CC0. [source](https://commons.wikimedia.org/wiki/File:Tiger_distribution.png)

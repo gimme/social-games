@@ -273,6 +273,7 @@ const TEXT_QUESTIONS = [
   { q: 'Which animal’s range is this?', a: 'Orangutan', cat: 'nature', d: 'expert', img: 'animals/orangutan-range.png' },
   { q: 'Which animal’s range is this?', a: 'Gorilla', cat: 'nature', d: 'expert', img: 'animals/gorilla-range.png' },
   { q: 'Which animal’s range is this?', a: 'Snow leopard', cat: 'nature', d: 'expert', img: 'animals/snow-leopard-range.png' },
+  { q: 'What animal is this?', a: 'Red panda', cat: 'nature', d: 'expert', img: 'animals/red-panda.jpg' },
   { q: 'What is the only venomous primate?', a: 'Slow loris', cat: 'nature', d: 'impossible' },
 
   // --- Sport --------------------------------------------------------------
