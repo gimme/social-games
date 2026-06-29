@@ -21,7 +21,7 @@
  * A question can carry a picture prompt (its `img` path under ./images/), shown
  * with an <img> so it stays crisp on every phone — a flag, an animal photo, or
  * any other art. Flags are SVGs in ./images/flags/ in each country's official
- * aspect ratio (see images/flags/CREDITS.md). Images load on demand; the
+ * aspect ratio (see images/CREDITS.md). Images load on demand; the
  * service worker caches each one as it's viewed, so a round you've played once
  * also works offline.
  *

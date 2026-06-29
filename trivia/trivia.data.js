@@ -15,7 +15,7 @@
  * Visual questions show a picture instead of (or alongside) the text prompt:
  * set `img` to a path under ./images/ and trivia.js renders it with an <img>.
  * Flags live in ./images/flags/ as SVGs in each country's official aspect ratio
- * (see images/flags/CREDITS.md); photos and other art go in sibling folders
+ * (see images/CREDITS.md); photos and other art go in sibling folders
  * like ./images/animals/. Images load on demand; the service worker caches each
  * one as it's viewed.
  */
