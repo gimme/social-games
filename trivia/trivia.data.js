@@ -12,26 +12,27 @@
  * <id>.js (see sw.js), so splitting the bank out keeps the game playable
  * offline after a single visit to the hub.
  *
- * Flags are real SVG files in ./flags/ (each in its country's official aspect
- * ratio — see flags/CREDITS.md), referenced by the `code` stem and rendered by
- * trivia.js with an <img> so they stay crisp at any size. They load on demand;
- * the service worker caches each one as it's viewed.
+ * Visual questions show a picture instead of (or alongside) the text prompt:
+ * set `img` to a path under ./images/ and trivia.js renders it with an <img>.
+ * Flags live in ./images/flags/ as SVGs in each country's official aspect ratio
+ * (see images/flags/CREDITS.md); photos and other art go in sibling folders
+ * like ./images/animals/. Images load on demand; the service worker caches each
+ * one as it's viewed.
  */
 
 /** @typedef {'basic' | 'easy' | 'med' | 'hard' | 'expert' | 'impossible'} Difficulty */
 
 /**
  * One question. Answers are open-ended (said out loud), so `a` is a short
- * canonical answer the host checks against, not a multiple choice. `fmt='flag'`
- * marks a visual question whose prompt is the flag image named by `code`.
+ * canonical answer the host checks against, not a multiple choice. An optional
+ * `img` adds a picture prompt, shown instead of or alongside the text.
  *
  * @typedef {Object} Question
- * @property {string} q              The text prompt ('' for visual questions).
+ * @property {string} q              The text prompt ('' for image-only questions).
  * @property {string} a              A short answer for the host to confirm against.
  * @property {string} cat            Category id (see CATEGORIES).
  * @property {Difficulty} d          Difficulty tier.
- * @property {'flag'} [fmt]          Optional special rendering (visual question).
- * @property {string} [code]         Flag file stem for a visual prompt (flags/<code>.svg).
+ * @property {string} [img]          Image path under images/ for a visual prompt (images/<img>).
  */
 
 /**
@@ -59,13 +60,13 @@ export const CATEGORIES = [
 ];
 
 /**
- * The flags pool — country plus the SVG stem in ./flags/. Difficulty is by how
- * widely recognised the flag is. This set is almost all well-known countries,
- * so it tops out at `expert` (the least familiar here — still real places a
- * keen player can name) and has nothing `impossible`: the genuinely obscure
- * flags (Pacific microstates and other rarely-seen nations) just aren't in
- * flags/ yet. Add a row — and drop its <code>.svg in flags/ — to extend it,
- * including to fill out the harder tiers.
+ * The flags pool — country plus the SVG stem in ./images/flags/. Difficulty is
+ * by how widely recognised the flag is. This set is almost all well-known
+ * countries, so it tops out at `expert` (the least familiar here — still real
+ * places a keen player can name) and has nothing `impossible`: the genuinely
+ * obscure flags (Pacific microstates and other rarely-seen nations) just aren't
+ * in images/flags/ yet. Add a row — and drop its <code>.svg in images/flags/ —
+ * to extend it, including to fill out the harder tiers.
  *
  * @type {{ code: string, name: string, d: Difficulty }[]}
  */
@@ -163,8 +164,7 @@ const FLAG_QUESTIONS = FLAGS.map((f) => ({
   a: f.name,
   cat: 'flags',
   d: f.d,
-  fmt: /** @type {'flag'} */ ('flag'),
-  code: f.code,
+  img: `flags/${f.code}.svg`,
 }));
 
 /**
@@ -249,6 +249,7 @@ const TEXT_QUESTIONS = [
   { q: 'What is the only mammal capable of true flight?', a: 'The bat', cat: 'nature', d: 'med' },
   { q: 'What is the largest species of fish?', a: 'The whale shark', cat: 'nature', d: 'med' },
   { q: 'What term refers to life in the sea?', a: 'Marine', cat: 'nature', d: 'med' },
+  { q: 'What animal is this? Be specific.', a: 'The Asian (Asiatic) elephant', cat: 'nature', d: 'hard', img: 'animals/asian-elephant.jpg' },
   { q: 'What animal has three hearts?', a: 'The octopus (or squid, cuttlefish)', cat: 'nature', d: 'hard' },
   { q: 'What is the longest snake?', a: 'The (reticulated) python', cat: 'nature', d: 'hard' },
   { q: 'A group of crows is known as a what?', a: 'A murder', cat: 'nature', d: 'hard' },

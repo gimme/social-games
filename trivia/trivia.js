@@ -16,12 +16,13 @@
  * session, even as you switch the mix; when a selection has been fully seen the
  * card says so and a tap starts just that selection over — the deck never
  * recycles on its own. Tap the card to reveal the answer (tap again for the
- * next); tap a flag to throw it full-screen for the table.
+ * next); tap a picture to throw it full-screen for the table.
  *
- * Flags are real SVG files in ./flags/ (each in its country's official aspect
- * ratio — see flags/CREDITS.md), shown with an <img> so they stay crisp at any
- * size and look the same on every phone. They load on demand; the service
- * worker caches each one as it's viewed, so a flags round you've played once
+ * A question can carry a picture prompt (its `img` path under ./images/), shown
+ * with an <img> so it stays crisp on every phone — a flag, an animal photo, or
+ * any other art. Flags are SVGs in ./images/flags/ in each country's official
+ * aspect ratio (see images/flags/CREDITS.md). Images load on demand; the
+ * service worker caches each one as it's viewed, so a round you've played once
  * also works offline.
  *
  * Self-contained at the folder level: this game imports only its own sibling
@@ -406,18 +407,21 @@ function renderCard() {
   card.append(meta);
 
   const content = el('div', 'qcard__content');
-  if (q.fmt === 'flag' && q.code) {
+  // Picture prompt, text prompt, or both: flags are picture-only (empty `q`),
+  // most questions text-only, and some (a "name this animal" photo) carry both.
+  // The image leads and the text sits beneath it, like a question under a photo.
+  if (q.img) {
     const glyph = el('div', 'qcard__glyph');
     const img = /** @type {HTMLImageElement} */ (el('img'));
-    img.src = `flags/${q.code}.svg`;
+    img.src = `images/${q.img}`;
     img.alt = '';
     // Nepal is the only non-rectangular flag; its own pennant edge stands in
     // for the frame, so a box border would just float around it.
-    if (q.code === 'np') img.classList.add('flag--shaped');
+    if (q.img === 'flags/np.svg') img.classList.add('flag--shaped');
     glyph.append(img);
     glyph.setAttribute('role', 'button');
     glyph.setAttribute('tabindex', '0');
-    glyph.setAttribute('aria-label', 'Show flag full screen');
+    glyph.setAttribute('aria-label', 'Show image full screen');
     // Its own action (present), and stop the tap/key bubbling so the card's
     // reveal doesn't also fire.
     const present = () => {
@@ -436,9 +440,8 @@ function renderCard() {
       }
     });
     content.append(glyph);
-  } else {
-    content.append(el('p', 'qcard__q', q.q));
   }
+  if (q.q) content.append(el('p', 'qcard__q', q.q));
   card.append(content);
 
   // Answer slot: fixed height, so flipping it never resizes anything.
@@ -503,9 +506,9 @@ function renderPresent() {
   overlay.append(el('div', 'present__close', '✕'));
   const glyph = el('div', 'present__glyph');
   const img = /** @type {HTMLImageElement} */ (el('img'));
-  img.src = `flags/${q.code}.svg`;
+  img.src = `images/${q.img}`;
   img.alt = '';
-  if (q.code === 'np') img.classList.add('flag--shaped'); // see renderPlay: non-rectangular
+  if (q.img === 'flags/np.svg') img.classList.add('flag--shaped'); // see renderPlay: non-rectangular
   glyph.append(img);
   overlay.append(glyph);
   makeTappable(overlay, () => {
@@ -517,7 +520,7 @@ function renderPresent() {
 
 function render() {
   let screen;
-  if (state.phase === 'play' && state.presenting && state.current && state.current.fmt) {
+  if (state.phase === 'play' && state.presenting && state.current && state.current.img) {
     screen = renderPresent();
   } else if (state.phase === 'play') {
     screen = renderPlay();
