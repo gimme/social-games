@@ -11,7 +11,7 @@
   margin: 0 auto;
   /* Installed fullscreen, the page reaches the real screen edges — keep the
      content out of the camera cutout and gesture areas. */
-  padding: max(var(--space-6), env(safe-area-inset-top))
+  padding: max(var(--space-4), env(safe-area-inset-top))
     max(var(--space-4), env(safe-area-inset-right))
     max(var(--space-8), env(safe-area-inset-bottom))
     max(var(--space-4), env(safe-area-inset-left));
@@ -89,7 +89,13 @@
 .qcard {
   display: flex;
   flex-direction: column;
-  height: 15rem;
+  /* Scales with the screen so taller phones get a roomier play area (an image
+     plus its question needs the height), while staying fixed for a given
+     viewport — so flipping the answer or dealing the next card never jumps.
+     svh (the address-bar-shown viewport) is stable and never overshoots the
+     visible area; dvh is avoided on purpose — it resizes as the bar hides and
+     would bring the jump back. */
+  height: clamp(16rem, 54svh, 30rem);
   padding: var(--space-4) var(--space-5);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
@@ -129,7 +135,10 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
+  /* `safe` falls back to top-alignment when an image + text are too tall to
+     centre — without it the overflow is clipped at the top and can't be
+     scrolled to (the photo's top edge would be cut off). */
+  justify-content: safe center;
   gap: var(--space-3); /* only shows when a card has both an image and text */
   overflow-y: auto;
   text-align: center;
@@ -340,20 +349,32 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: var(--space-5);
+  /* Near full-bleed: only enough inset to clear the notch / home indicator when
+     installed fullscreen, with a hair of margin otherwise. */
+  padding: max(var(--space-2), env(safe-area-inset-top))
+    max(var(--space-2), env(safe-area-inset-right))
+    max(var(--space-2), env(safe-area-inset-bottom))
+    max(var(--space-2), env(safe-area-inset-left));
   background: var(--bg);
   cursor: pointer;
 }
 
+/* Fill the overlay so the image sizes against the whole padded viewport — the
+   max-width/height: 100% below resolve against this box, not the image's own
+   intrinsic size. */
 .present__glyph {
   display: flex;
   align-items: center;
   justify-content: center;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
 }
 
 .present__glyph img {
-  max-width: 92vw;
-  max-height: 84vh;
+  max-width: 100%;
+  max-height: 100%;
   width: auto;
   height: auto;
   border: 1px solid rgba(255, 255, 255, 0.18);

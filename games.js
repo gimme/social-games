@@ -50,7 +50,7 @@ export const games = [
     name: 'Trivia',
     tagline: 'A trivia deck you steer — run a category, fire off a flags round, or wing it. You host; the phone deals.',
     emoji: '🧠',
-    players: '2+ players',
+    players: '1+ players',
     path: 'trivia/',
   },
 
