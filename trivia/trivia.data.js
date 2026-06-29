@@ -215,6 +215,7 @@ const TEXT_QUESTIONS = [
   { q: 'Which ancient city was destroyed by the eruption of Mount Vesuvius in 79 AD?', a: 'Pompeii', cat: 'hist', d: 'hard' },
   { q: 'Which English queen reigned when the Spanish Armada was defeated in 1588?', a: 'Elizabeth I', cat: 'hist', d: 'expert' },
   { q: 'Who was the first Emperor of Rome?', a: 'Augustus (Octavian)', cat: 'hist', d: 'expert' },
+  { q: 'Who is this? (Nicknamed "the Scourge of God," a 5th-century ruler of the Huns)', a: 'Attila the Hun', cat: 'hist', d: 'expert', img: 'history/attila.jpg' },
   { q: 'What royal charter, signed in 1215, limited the powers of the English king?', a: 'Magna Carta ("Great Charter")', cat: 'hist', d: 'expert' },
   { q: 'What century did the Hundred Years’ War end?', a: '15th century', cat: 'hist', d: 'expert' },
   { q: 'Which 1648 peace settlement ended the Thirty Years’ War?', a: 'The Peace of Westphalia', cat: 'hist', d: 'impossible' },
