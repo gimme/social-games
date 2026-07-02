@@ -16,6 +16,11 @@ import { games } from './games.js';
  *    games.js — so one visit to the hub makes everything playable offline.
  *    Opening the hub later re-syncs the lot in the background, so even games
  *    nobody tapped stay current.
+ *  - Images are the one exception to network-first: once cached, they're
+ *    served immediately. Pictures are big, and games treat them as immutable
+ *    (replacing one means a new filename), so waiting on the network buys
+ *    nothing — and the background refresh still runs, so even an image edited
+ *    in place is only ever one view behind.
  *
  * The browser re-downloads sw.js (and games.js, which it imports) on every
  * navigation and reinstalls on any byte change, so the worker itself tracks
@@ -124,6 +129,10 @@ async function respond(event) {
 
   const cached = await cache.match(event.request, { ignoreSearch: true });
   if (!cached) return fromNetwork;
+
+  // Cached images win outright (see the header) — the network fetch above
+  // still refreshes the copy in the background.
+  if (event.request.destination === 'image') return cached;
 
   try {
     return await Promise.race([fromNetwork, rejectAfter(NETWORK_TIMEOUT_MS)]);

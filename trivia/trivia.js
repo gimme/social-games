@@ -21,9 +21,11 @@
  * A question can carry a picture prompt (its `img` path under ./images/), shown
  * with an <img> so it stays crisp on every phone — a flag, an animal photo, or
  * any other art. Flags are SVGs in ./images/flags/ in each country's official
- * aspect ratio (see images/CREDITS.md). Images load on demand; the
- * service worker caches each one as it's viewed, so a round you've played once
- * also works offline.
+ * aspect ratio (see images/CREDITS.md). The upcoming question is picked when
+ * the current one is dealt, so its picture downloads while the table mulls the
+ * question on screen; the service worker serves cached images instantly and
+ * keeps each one it's fetched, so a round you've played once also works
+ * offline (see ../sw.js).
  *
  * Self-contained at the folder level: this game imports only its own sibling
  * module — the question bank in trivia.data.js, which holds the categories and
@@ -72,6 +74,7 @@ const STORAGE_KEY = 'trivia.v2';
  * @property {Set<string>} cats         Categories in play (multi-select; empty at first run).
  * @property {Set<Difficulty>} diffs    Difficulty tiers in play.
  * @property {Question | null} current  The question on screen.
+ * @property {Question | null} upcoming Pre-picked next question, so its picture can load ahead.
  * @property {boolean} revealed         Whether its answer is showing.
  * @property {boolean} presenting       Whether the visual is shown full-screen.
  * @property {number} asked             Count of questions dealt this session.
@@ -85,6 +88,7 @@ const state = {
   cats: new Set(),
   diffs: new Set(/** @type {Difficulty[]} */ (DEFAULT_DIFFS)),
   current: null,
+  upcoming: null,
   revealed: false,
   presenting: false,
   asked: 0,
@@ -94,7 +98,7 @@ const state = {
 
 const app = /** @type {HTMLElement} */ (document.getElementById('app'));
 
-// --- pure helpers (DOM-free) -----------------------------------------------
+// --- deck helpers (no rendering) ---------------------------------------------
 
 /** @param {number} n @returns {number} A random integer in [0, n). */
 function randInt(n) {
@@ -139,8 +143,14 @@ function pickNext() {
  * @param {boolean} [count]
  */
 function deal(count = true) {
-  const q = pickNext();
+  // Prefer the pre-picked question — its picture has been loading since the
+  // last deal — unless the host has changed the mix out from under it.
+  const u = state.upcoming;
+  const q = u && state.cats.has(u.cat) && state.diffs.has(u.d) && !state.seen.has(u)
+    ? u
+    : pickNext();
   state.current = q;
+  state.upcoming = null;
   state.revealed = false;
   state.presenting = false;
   if (!q) return;
@@ -149,6 +159,11 @@ function deal(count = true) {
   if (count) state.asked += 1;
   state.lastDiffs.push(q.d);
   if (state.lastDiffs.length > 2) state.lastDiffs.shift();
+
+  // Pick the next question now and warm its picture while this one is on
+  // screen, so a picture prompt paints the moment it's dealt.
+  state.upcoming = pickNext();
+  if (state.upcoming && state.upcoming.img) new Image().src = `images/${state.upcoming.img}`;
 }
 
 /**
@@ -303,6 +318,7 @@ function renderHome() {
     state.seen = new Set();
     state.lastDiffs = [];
     state.current = null;
+    state.upcoming = null;
     state.revealed = false;
     state.presenting = false;
     state.phase = 'play';
