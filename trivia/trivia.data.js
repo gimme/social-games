@@ -186,12 +186,13 @@ const TEXT_QUESTIONS = [
   { q: 'What is the capital of Spain?', a: 'Madrid', cat: 'geo', d: 'easy' },
   { q: 'Which is the largest country in the world by area?', a: 'Russia', cat: 'geo', d: 'easy' },
   { q: 'Which is the largest hot desert in the world?', a: 'Sahara', cat: 'geo', d: 'easy' },
+  { q: 'What country has the third largest population?', a: 'USA', cat: 'geo', d: 'easy' },
   { q: 'What is the smallest country in the world by area?', a: 'Vatican City', cat: 'geo', d: 'med' },
   { q: 'What is the capital of Canada?', a: 'Ottawa', cat: 'geo', d: 'med' },
   { q: 'What is the capital of Australia?', a: 'Canberra', cat: 'geo', d: 'hard' },
   { q: 'Mount Kilimanjaro is in which country?', a: 'Tanzania', cat: 'geo', d: 'hard' },
   { q: 'What is the capital of New Zealand?', a: 'Wellington', cat: 'geo', d: 'hard' },
-  { q: 'Name one of the two countries bordering Lake Titicaca (the higheset navigable lake in the world, and South America’s largest)?', a: 'Bolivia and Peru', cat: 'geo', d: 'expert' },
+  { q: 'Name one of the two countries bordering Lake Titicaca (the highest navigable lake in the world, and South America’s largest)?', a: 'Bolivia and Peru', cat: 'geo', d: 'expert' },
   { q: 'Which African country is historically known as Abyssinia?', a: 'Ethiopia', cat: 'geo', d: 'expert' },
   { q: 'What is the largest desert in the world?', a: 'Antarctic Desert', cat: 'geo', d: 'expert' },
   { q: 'What is the capital of Kazakhstan?', a: 'Astana', cat: 'geo', d: 'impossible' },
@@ -214,6 +215,7 @@ const TEXT_QUESTIONS = [
   { q: 'What year did the French Revolution begin?', a: '1789', cat: 'hist', d: 'hard' },
   { q: 'What year did the United States declare independence?', a: '1776', cat: 'hist', d: 'hard' },
   { q: 'Which ancient city was destroyed by the eruption of Mount Vesuvius in 79 AD?', a: 'Pompeii', cat: 'hist', d: 'hard' },
+  { q: 'What pandemic killed between 30–50% of Europe’s population in the 1300s?', a: 'The Black Death (Bubonic Plague)', cat: 'hist', d: 'hard' },
   { q: 'Which English queen reigned when the Spanish Armada was defeated in 1588?', a: 'Elizabeth I', cat: 'hist', d: 'expert' },
   { q: 'Who was the first Emperor of Rome?', a: 'Augustus (Octavian)', cat: 'hist', d: 'expert' },
   { q: 'Who is this? (Nicknamed "the Scourge of God," a 5th-century ruler of the Huns)', a: 'Attila the Hun', cat: 'hist', d: 'expert', img: 'history/attila.webp' },
@@ -279,10 +281,10 @@ const TEXT_QUESTIONS = [
 
   // --- Sport --------------------------------------------------------------
   { q: 'In what sport would you perform a slam dunk?', a: 'Basketball', cat: 'sport', d: 'basic' },
-  { q: 'How many players are on the field in a football (soccer) match?' , a: '22', cat: 'sport', d: 'basic' },
+  { q: 'How many players are on the field in a football match?' , a: '22', cat: 'sport', d: 'basic' },
   { q: 'How many years apart are the Summer Olympic Games held?', a: '4', cat: 'sport', d: 'basic' },
   { q: 'How many players from one team are on a basketball court?', a: '5', cat: 'sport', d: 'easy' },
-  { q: 'In football (soccer), what is it called when a player scores 2 goals in one game?', a: 'Brace', cat: 'sport', d: 'med' },
+  { q: 'In football, what is it called when a player scores 2 goals in one game?', a: 'Brace', cat: 'sport', d: 'med' },
   { q: 'What country has won the most men’s FIFA World Cups?', a: 'Brazil (5)', cat: 'sport', d: 'med' },
   { q: 'How many players are in a cricket team?', a: '11', cat: 'sport', d: 'med' },
   { q: 'In golf, what is a score of one stroke under par on a hole called?', a: 'Birdie', cat: 'sport', d: 'med' },
@@ -295,6 +297,7 @@ const TEXT_QUESTIONS = [
   { q: 'What city hosted the first modern Olympic Games in 1896?', a: 'Athens', cat: 'sport', d: 'expert' },
   { q: 'In golf, what is the term for a score of three under par on a hole?', a: 'Albatross (or double eagle)', cat: 'sport', d: 'expert' },
   { q: 'How many points is a "safety" worth in American football?', a: '2', cat: 'sport', d: 'expert' },
+  { q: 'Edson Arantes do Nascimento — a legendary (Brazilian) footballer — is better known by what nickname?', a: 'Pelé', cat: 'sport', d: 'expert' },
   { q: 'In snooker, how many points is potting the black ball worth?', a: '7', cat: 'sport', d: 'impossible' },
 
   // --- Music --------------------------------------------------------------
