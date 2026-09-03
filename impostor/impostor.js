@@ -3,9 +3,11 @@
 /*
  * Impostor — a pass-the-phone social deduction game.
  *
- * Players first take turns secretly typing words into one shared pool. Every
- * word carries a HINT — the host's category by default, or whatever the player
- * typed instead — so a pool can mix themes freely. A round opens by showing the
+ * Players first secretly type words into one shared pool: a roster lists every
+ * player, and each opens their own page — in any order, as often as they like —
+ * to add words or take their own back out. Every word carries a HINT — the
+ * host's category by default, or whatever the player typed instead — so a pool
+ * can mix themes freely. A round opens by showing the
  * hint behind its word to the whole table; then the app secretly assigns roles:
  * everyone gets the same secret word except the impostor — who gets nothing, or
  * (in a "decoy" round) a different word under the same hint and no warning. The
@@ -78,10 +80,12 @@ const STORAGE_KEY = 'impostor.v3';
  * @property {Settings} settings
  * @property {PoolEntry[]} pool              Words (display form), duplicates allowed; consumed as rounds are built.
  * @property {Round | null} round            The current round (during hint/reveal/play/result).
- * @property {number} turn                   0-based player index during a pass-around.
- * @property {boolean} gateOpen              Whether the current player's pass gate is passed.
- * @property {PoolEntry[]} draftWords        Words added this entry turn (committed to the pool on Done).
- * @property {string} draftHint              Hint the next word gets; starts as the category each turn.
+ * @property {number} turn                   0-based player index: whose page is open (entry) or
+ *                                           whose turn it is (reveal pass-around).
+ * @property {boolean} gateOpen              Whether a player has been picked (entry) or the
+ *                                           current player's pass gate is passed (reveal).
+ * @property {string} entryHint              Hint the next word gets; starts as the category
+ *                                           each time a player opens their page.
  * @property {boolean} advancedOpen          Whether the advanced settings are expanded.
  */
 
@@ -401,8 +405,7 @@ const state = {
   round: null,
   turn: 0,
   gateOpen: false,
-  draftWords: [],
-  draftHint: '',
+  entryHint: '',
   advancedOpen: false,
 };
 
@@ -410,7 +413,7 @@ const state = {
 
 /**
  * Save the durable parts of state. Transient pass-around bits (turn, gateOpen,
- * drafts, the round's secrets) are saved only enough to restore safely.
+ * the round's secrets) are saved only enough to restore safely.
  */
 function save() {
   try {
@@ -474,13 +477,12 @@ function load() {
       state.phase = 'home';
     }
 
-    // Always reset any pass-around to a safe pass-gate and clear transient
-    // per-turn drafts so no secret can flash on refresh.
+    // Always reset any pass-around to a safe gate (the roster during entry,
+    // the pass-gate during reveal) so no player's screen can flash on refresh.
     const turn = typeof data.turn === 'number' ? data.turn : 0;
     state.turn = clamp(turn, 0, Math.max(0, state.playerCount - 1));
     state.gateOpen = false;
-    state.draftWords = [];
-    state.draftHint = '';
+    state.entryHint = '';
   } catch {
     // Corrupt payload — fall back to defaults already in state.
   }
@@ -680,12 +682,11 @@ function goHome() {
   render();
 }
 
-/** Begin the entry pass-around (always append mode — never resets the pool). */
+/** Open the entry roster (always append mode — never resets the pool). */
 function goEntry() {
   state.phase = 'entry';
   state.turn = 0;
   state.gateOpen = false;
-  state.draftWords = [];
   render();
 }
 
@@ -790,6 +791,8 @@ function renderHome() {
         `${wordCount} ${wordCount === 1 ? 'word' : 'words'} in the pool.`,
       ),
     );
+    const warn = lonePoolWarningEl();
+    if (warn) screen.append(warn);
   } else if (firstRun) {
     screen.append(
       el(
@@ -917,32 +920,128 @@ function renderPassGate(label, action, onPass) {
   return screen;
 }
 
-function renderEntry() {
-  const i = state.turn;
-  const isLast = i >= state.playerCount - 1;
+/**
+ * Words in the pool that a given player added.
+ *
+ * @param {number} player
+ * @returns {PoolEntry[]}
+ */
+function wordsBy(player) {
+  return state.pool.filter((e) => e.by === player);
+}
 
-  if (!state.gateOpen) {
-    return renderPassGate(
-      `Pass to Player ${i + 1}.`,
-      'I’m holding the phone',
-      () => {
-        state.gateOpen = true;
-        state.draftWords = [];
-        state.draftHint = displayForm(state.settings.category);
-        render();
-      },
-    );
+/** @param {number} n @returns {string} e.g. "1 word", "3 words". */
+function wordCountLabel(n) {
+  return `${n} ${n === 1 ? 'word' : 'words'}`;
+}
+
+/**
+ * A fairness warning about the pool, or null when there's nothing to flag.
+ *
+ * When every word left came from one player, a round that makes them the
+ * impostor has no choice but to use one of their own words as the secret — and
+ * the hint would tell them which. Shown wherever a round can be started, and
+ * on the roster where it gets fixed.
+ *
+ * @returns {string | null}
+ */
+function lonePoolWarning() {
+  if (state.pool.length === 0) return null;
+  const by = new Set(state.pool.map((e) => e.by));
+  if (by.size !== 1) return null;
+  const [p] = by;
+  if (p < 0) return null; // words of unknown origin can't be anyone's own
+  return `Only Player ${p + 1} has words in the pool.`;
+}
+
+/**
+ * The lone-contributor warning as a screen element, or null.
+ *
+ * @returns {HTMLElement | null}
+ */
+function lonePoolWarningEl() {
+  const text = lonePoolWarning();
+  return text ? el('p', 'screen__hint screen__hint--warn', text) : null;
+}
+
+/**
+ * The entry roster: one tile per player. Each player taps their own to open
+ * their private page — in any order, as often as they like — so there's no
+ * pass-around to sit through, and anyone can come back later for more. The
+ * roster doubles as the "safe" screen between players: it shows who has words
+ * in the pool (so the table can see who still needs to go) but never which
+ * words, nor how many.
+ */
+function renderRoster() {
+  const screen = el('section', 'screen');
+  screen.append(el('h2', 'screen__title', 'Add words'));
+  screen.append(
+    el(
+      'p',
+      'screen__lede',
+      'Pass the phone around. Tap your own tile to add or change your words in private.',
+    ),
+  );
+
+  const grid = el('div', 'players');
+  for (let p = 0; p < state.playerCount; p++) {
+    const hasWords = wordsBy(p).length > 0;
+    const tile = el('button', 'player');
+    /** @type {HTMLButtonElement} */ (tile).type = 'button';
+    tile.append(el('span', 'player__name', `Player ${p + 1}`));
+    if (hasWords) {
+      tile.classList.add('player--has-words');
+      tile.append(el('span', 'player__status', '✓ Has words'));
+    } else {
+      tile.append(el('span', 'player__status', 'No words'));
+    }
+    tile.addEventListener('click', () => {
+      state.turn = p;
+      state.gateOpen = true;
+      state.entryHint = displayForm(state.settings.category);
+      render();
+    });
+    grid.append(tile);
   }
+  screen.append(grid);
+
+  const total = state.pool.length;
+  screen.append(
+    el(
+      'p',
+      'screen__hint',
+      total === 0 ? 'Add at least one word to start.' : `${wordCountLabel(total)} in the pool.`,
+    ),
+  );
+  const warn = lonePoolWarningEl();
+  if (warn) screen.append(warn);
+
+  const done = el('button', 'btn', 'Done adding words');
+  done.addEventListener('click', () => goHome());
+  screen.append(done);
+
+  return screen;
+}
+
+/**
+ * One player's private entry page: every word of theirs still in the pool,
+ * plus the input to add more. Adds and removes write straight to the pool, so
+ * the list is always the truth and nothing is lost if the page is refreshed
+ * (a refresh just drops back to the roster).
+ */
+function renderEntry() {
+  if (!state.gateOpen) return renderRoster();
+
+  const i = state.turn;
 
   const screen = el('section', 'screen');
-  screen.append(progressDots(state.playerCount, state.turn));
   screen.append(el('h2', 'screen__title', `Player ${i + 1}, add words`));
   screen.append(
     el('p', 'screen__hint', 'Aim for 2+ words. Nobody sees who added what.'),
   );
 
   // Input rows: the word, and beneath it the hint it'll carry — prefilled with
-  // the host's category and sticky for the rest of this player's turn.
+  // the host's category and sticky while this player's page is open.
   const form = el('form', 'entry__form');
   const row = el('div', 'entry__row');
   const input = upperInput('Type a word…', '');
@@ -951,15 +1050,15 @@ function renderEntry() {
   row.append(input, add);
   const hintRow = el('label', 'entry__hintrow');
   hintRow.append(el('span', 'entry__hintlabel', 'Hint'));
-  const hintInput = upperInput('Optional', state.draftHint);
+  const hintInput = upperInput('Optional', state.entryHint);
   hintInput.classList.add('entry__hintinput');
   hintInput.addEventListener('input', () => {
-    state.draftHint = hintInput.value;
+    state.entryHint = hintInput.value;
   });
   hintRow.append(hintInput);
   form.append(row, hintRow);
 
-  // This turn's words, grouped under their hints — the host's category first,
+  // This player's words, grouped under their hints — the host's category first,
   // then any hints the player typed themselves, in the order they appeared.
   const groupsEl = el('div', 'chipgroups');
   const renderChips = () => {
@@ -967,7 +1066,7 @@ function renderEntry() {
     const catKey = normaliseWord(state.settings.category);
     /** @type {Map<string, PoolEntry[]>} */
     const groups = new Map();
-    for (const e of state.draftWords) {
+    for (const e of wordsBy(i)) {
       const g = groups.get(normaliseWord(e.hint));
       if (g) g.push(e);
       else groups.set(normaliseWord(e.hint), [e]);
@@ -986,7 +1085,10 @@ function renderEntry() {
         /** @type {HTMLButtonElement} */ (x).type = 'button';
         x.setAttribute('aria-label', `Remove ${e.word}`);
         x.addEventListener('click', () => {
-          state.draftWords.splice(state.draftWords.indexOf(e), 1);
+          // Chips hold the pool's own entry objects, so removing by identity
+          // removes exactly this word — even if another player added the same text.
+          state.pool.splice(state.pool.indexOf(e), 1);
+          save();
           renderChips();
         });
         chip.append(x);
@@ -997,22 +1099,23 @@ function renderEntry() {
     }
   };
 
-  /** Add the current input to this turn's draft (committed to the pool on Done). */
+  /** Add the current input to the pool under this player's name. */
   const addWord = () => {
     const raw = input.value;
     const norm = normaliseWord(raw);
     input.value = '';
     input.focus();
     if (!norm) return;
-    // Reject only an exact duplicate within this player's OWN draft (so a
-    // double-tap doesn't bloat their chips). Duplicates across players are kept —
+    // Reject only an exact duplicate among this player's OWN words (so a
+    // double-tap doesn't bloat their list). Duplicates across players are kept —
     // every word entered ends up in the pool.
-    if (state.draftWords.some((e) => normaliseWord(e.word) === norm)) return;
-    state.draftWords.push({
+    if (wordsBy(i).some((e) => normaliseWord(e.word) === norm)) return;
+    state.pool.push({
       word: displayForm(raw),
-      hint: displayForm(state.draftHint),
-      by: state.turn,
+      hint: displayForm(state.entryHint),
+      by: i,
     });
+    save();
     renderChips();
   };
 
@@ -1025,32 +1128,12 @@ function renderEntry() {
   screen.append(groupsEl);
   renderChips();
 
-  const done = el('button', 'btn', isLast ? 'Done adding words' : 'Done → pass to next');
+  const done = el('button', 'btn', 'Done');
   done.addEventListener('click', () => {
-    // The last player must leave at least one word in the pool (counting this
-    // turn's not-yet-committed draft).
-    if (isLast && state.pool.length + state.draftWords.length === 0) return;
-
-    // Commit this turn's words to the shared pool, then move on. (Committing on
-    // Done — not per keystroke — keeps the chips and the pool in sync, so
-    // removing a chip really removes the word.)
-    state.pool.push(...state.draftWords);
-    state.draftWords = [];
-
-    if (isLast) {
-      goHome();
-    } else {
-      state.turn += 1;
-      state.gateOpen = false;
-      render();
-    }
+    state.gateOpen = false;
+    render();
   });
   screen.append(done);
-
-  // Guard: nothing anywhere yet on the last player — show a gentle note.
-  if (isLast && state.pool.length === 0 && state.draftWords.length === 0) {
-    screen.append(el('p', 'screen__hint', 'Add at least one word to start.'));
-  }
 
   return screen;
 }
@@ -1250,6 +1333,8 @@ function renderResult() {
         : `${left} ${left === 1 ? 'word' : 'words'} left in the pool.`,
     ),
   );
+  const warn = lonePoolWarningEl();
+  if (warn) screen.append(warn);
 
   // Actions: straight into another round (while the pool still has words —
   // rounds consume them), or back to the one Home for everything else.

@@ -30,6 +30,10 @@
   font-size: 0.9rem;
 }
 
+.screen__hint--warn {
+  color: var(--warning);
+}
+
 .screen__howto {
   align-self: flex-start;
   margin-top: calc(-1 * var(--space-2));
@@ -317,6 +321,54 @@
   color: var(--danger);
   font-size: 1.8rem;
   font-weight: 800;
+}
+
+/* Entry roster — one tile per player; tap your own to open your page. */
+.players {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.player {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-card);
+  color: var(--text);
+  text-align: left;
+  transition: transform 0.04s ease, border-color 0.15s ease;
+}
+
+.player:hover {
+  border-color: var(--accent);
+}
+
+.player:active {
+  transform: translateY(1px);
+}
+
+.player:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.player__name {
+  font-size: 1.05rem;
+  font-weight: 700;
+}
+
+.player__status {
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.player--has-words .player__status {
+  color: var(--success);
 }
 
 /* Entry — word input, hint input, chips grouped by hint */
