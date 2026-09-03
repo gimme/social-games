@@ -154,8 +154,8 @@
   font-weight: 600;
 }
 
-/* Category banner */
-.category-banner {
+/* Hint banner (play screen) */
+.hint-banner {
   align-self: center;
   padding: var(--space-2) var(--space-4);
   border: 1px solid var(--border);
@@ -254,7 +254,7 @@
   font-weight: 700;
 }
 
-.card__category {
+.card__eyebrow {
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-size: 0.8rem;
@@ -277,6 +277,32 @@
   color: var(--text-muted);
 }
 
+.card--hint {
+  border-color: var(--accent);
+  background: linear-gradient(180deg, rgba(108, 140, 255, 0.14), var(--bg-card));
+}
+
+/* Hints can be a phrase, not just a word — a notch smaller so they wrap well. */
+.card__word--hint {
+  font-size: 2rem;
+}
+
+/* The out-of-the-way "skip this round" link under the hint card. */
+.screen__skip {
+  align-self: center;
+  margin-top: var(--space-8);
+  padding: var(--space-2) var(--space-3);
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.screen__skip:hover {
+  color: var(--text);
+  text-decoration: underline;
+}
+
 /*
  * The overt-impostor card. Note: in a DECOY round the impostor sees the
  * .card--word screen (identical to a crewmate), never this one — so this
@@ -293,13 +319,19 @@
   font-weight: 800;
 }
 
-/* Entry — input + chips */
+/* Entry — word input, hint input, chips grouped by hint */
 .entry__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.entry__row {
   display: flex;
   gap: var(--space-2);
 }
 
-.entry__form .field__input {
+.entry__row .field__input {
   flex: 1;
 }
 
@@ -309,11 +341,57 @@
   padding: var(--space-3) var(--space-5);
 }
 
+/* The hint a new word will carry — secondary to the word itself. */
+.entry__hintrow {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding-left: var(--space-2);
+}
+
+.entry__hintlabel {
+  flex: 0 0 auto;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.entry__hintinput {
+  flex: 1;
+  padding: var(--space-2) var(--space-3);
+  font-size: 0.95rem;
+}
+
+.chipgroups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.chipgroups:empty {
+  display: none;
+}
+
+.chipgroup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.chipgroup__title {
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
 .chips {
   display: flex;
   flex-wrap: wrap;
   gap: var(--space-2);
-  min-height: 1rem;
 }
 
 .chip {
