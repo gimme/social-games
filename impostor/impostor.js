@@ -23,6 +23,10 @@
  * by player before word, so typing more words doesn't make yours come up more
  * often.
  *
+ * The phone can't tell who's holding it, so nothing stops a player opening
+ * someone else's page. Instead the roster keeps a short history of which pages
+ * were opened and how long ago, so a peek doesn't go unnoticed by the table.
+ *
  * Self-contained: this game imports nothing and is the only script on its page.
  *
  * The pure round-building logic (buildRound) is DOM-free so it can be exercised
@@ -34,6 +38,9 @@ const MAX_PLAYERS = 12;
 const DEFAULT_PLAYERS = 4;
 
 const STORAGE_KEY = 'impostor.v3';
+
+/** How far back the roster's "opened" history reaches. */
+const OPENS_WINDOW_MS = 10 * 60 * 1000;
 
 /**
  * @typedef {'normal' | 'two-impostor' | 'no-impostor' | 'everyone-impostor'} RoundType
@@ -64,6 +71,16 @@ const STORAGE_KEY = 'impostor.v3';
  */
 
 /**
+ * One opening of a player's entry page, kept so the roster can show who was
+ * looked at and when. Recorded on the tap itself — before any words render —
+ * so a refresh or a closed tab can't dodge it.
+ *
+ * @typedef {Object} PageOpen
+ * @property {number} p   Player index whose page was opened.
+ * @property {number} t   When (epoch ms).
+ */
+
+/**
  * @typedef {Object} Round
  * @property {RoundType} type
  * @property {boolean} decoy                 Did the decoy modifier actually apply.
@@ -81,6 +98,7 @@ const STORAGE_KEY = 'impostor.v3';
  * @property {number} playerCount
  * @property {Settings} settings
  * @property {PoolEntry[]} pool              Words (display form), duplicates allowed; consumed as rounds are built.
+ * @property {PageOpen[]} opens              Entry-page opens, oldest first; pruned to OPENS_WINDOW_MS.
  * @property {Round | null} round            The current round (during hint/reveal/play/result).
  * @property {number} turn                   0-based player index: whose page is open (entry) or
  *                                           whose turn it is (reveal pass-around).
@@ -147,6 +165,32 @@ function normaliseWord(raw) {
  */
 function displayForm(raw) {
   return raw.trim().replace(/\s+/g, ' ').toUpperCase();
+}
+
+/**
+ * The opens still inside the history window.
+ *
+ * @param {PageOpen[]} opens
+ * @param {number} [now]
+ * @returns {PageOpen[]}
+ */
+function recentOpens(opens, now = Date.now()) {
+  return opens.filter((o) => now - o.t < OPENS_WINDOW_MS);
+}
+
+/**
+ * A coarse "how long ago" label. Ages aren't ticked live — the roster is
+ * re-rendered at every handoff, which is when anyone looks — so the units stay
+ * rough enough not to imply precision they don't have.
+ *
+ * @param {number} ms
+ * @returns {string}
+ */
+function ageLabel(ms) {
+  const s = Math.max(0, Math.floor(ms / 1000));
+  if (s < 10) return 'just now';
+  if (s < 60) return `${s} s ago`;
+  return `${Math.floor(s / 60)} min ago`;
 }
 
 /**
@@ -419,6 +463,7 @@ const state = {
   playerCount: DEFAULT_PLAYERS,
   settings: defaultSettings(),
   pool: [],
+  opens: [],
   round: null,
   turn: 0,
   gateOpen: false,
@@ -440,6 +485,7 @@ function save() {
       playerCount: state.playerCount,
       settings: state.settings,
       pool: state.pool,
+      opens: recentOpens(state.opens),
       round: state.round,
       turn: state.turn,
     };
@@ -476,6 +522,7 @@ function load() {
       };
     }
     if (Array.isArray(data.pool)) state.pool = parseEntries(data.pool);
+    if (Array.isArray(data.opens)) state.opens = recentOpens(parseOpens(data.opens));
     if (data.round && typeof data.round === 'object') {
       const r = data.round;
       if (typeof r.hint !== 'string') r.hint = '';
@@ -521,6 +568,23 @@ function parseEntries(items) {
       hint: typeof e.hint === 'string' ? e.hint : '',
       by: typeof e.by === 'number' && Number.isInteger(e.by) ? e.by : -1,
     });
+  }
+  return out;
+}
+
+/**
+ * @param {unknown[]} items
+ * @returns {PageOpen[]} The well-formed opens among `items`.
+ */
+function parseOpens(items) {
+  /** @type {PageOpen[]} */
+  const out = [];
+  for (const item of items) {
+    if (!item || typeof item !== 'object') continue;
+    const o = /** @type {Record<string, unknown>} */ (item);
+    if (typeof o.p !== 'number' || !Number.isInteger(o.p)) continue;
+    if (typeof o.t !== 'number' || !Number.isFinite(o.t)) continue;
+    out.push({ p: o.p, t: o.t });
   }
   return out;
 }
@@ -840,6 +904,7 @@ function renderHome() {
       );
       if (!ok) return;
       state.pool = [];
+      state.opens = [];
       state.round = null;
       save();
       render();
@@ -988,6 +1053,11 @@ function lonePoolWarningEl() {
  * roster doubles as the "safe" screen between players: each tile's dot shows
  * how its player stands in the pool — none, one, or more words — so the table
  * can see who still needs a go, but never which words nor an exact count.
+ *
+ * Nothing stops a player tapping someone else's tile, so the roster ends with
+ * a history of which pages were opened and how long ago. Every legitimate
+ * handoff opens exactly one page, so a name that shows up when its player
+ * didn't have the phone is there for the whole table to see.
  */
 function renderRoster() {
   const screen = el('section', 'screen');
@@ -1012,6 +1082,9 @@ function renderRoster() {
     tile.setAttribute('aria-label', `Player ${p + 1}, ${spoken}`);
     tile.append(el('span', 'player__name', `Player ${p + 1}`));
     tile.addEventListener('click', () => {
+      // Log the open first: render() persists it before the page can be seen.
+      state.opens = recentOpens(state.opens);
+      state.opens.push({ p, t: Date.now() });
       state.turn = p;
       state.gateOpen = true;
       state.entryHint = displayForm(state.settings.category);
@@ -1036,7 +1109,36 @@ function renderRoster() {
   done.addEventListener('click', () => goHome());
   screen.append(done);
 
+  const history = opensHistory();
+  if (history) screen.append(history);
+
   return screen;
+}
+
+/**
+ * The roster's "opened" history: every entry-page open inside the window,
+ * newest first, each with a coarse age. Null when there's nothing to show.
+ *
+ * @returns {HTMLElement | null}
+ */
+function opensHistory() {
+  const now = Date.now();
+  const opens = recentOpens(state.opens, now);
+  if (opens.length === 0) return null;
+
+  const wrap = el('section', 'opens');
+  wrap.append(el('h3', 'opens__title', 'Opened'));
+  const list = el('ol', 'opens__list');
+  list.setAttribute('aria-label', 'Pages opened recently, newest first');
+  for (let k = opens.length - 1; k >= 0; k--) {
+    const o = opens[k];
+    const item = el('li', 'opens__item');
+    item.append(el('span', 'opens__who', `Player ${o.p + 1}`));
+    item.append(el('span', 'opens__age', ageLabel(now - o.t)));
+    list.append(item);
+  }
+  wrap.append(list);
+  return wrap;
 }
 
 /**

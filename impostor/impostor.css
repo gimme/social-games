@@ -386,6 +386,53 @@
   font-weight: 700;
 }
 
+/*
+ * Roster history — which pages were opened and how long ago, newest first.
+ * A quiet footer: it's a receipt for the table, not a control.
+ */
+.opens {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  padding-top: var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.opens__title {
+  margin: 0;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
+.opens__list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.opens__item {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-3);
+  color: var(--text-muted);
+  font-size: 0.9rem;
+}
+
+.opens__who {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.opens__age {
+  font-variant-numeric: tabular-nums;
+}
+
 /* Entry — word input, hint input, chips grouped by hint */
 .entry__form {
   display: flex;
