@@ -7,8 +7,10 @@
  * player, and each opens their own page — in any order, as often as they like —
  * to add words or take their own back out. Every word carries a HINT — the
  * host's category by default, or whatever the player typed instead — so a pool
- * can mix themes freely. A round opens by showing the
- * hint behind its word to the whole table; then the app secretly assigns roles:
+ * can mix themes freely. A round draws from the whole pool unless the host has
+ * picked one category (a hint with two or more words) to PLAY FROM, which lets
+ * the table work through a theme. It opens by showing the hint behind its word
+ * to the whole table; then the app secretly assigns roles:
  * everyone gets the same secret word except the impostor — who gets nothing, or
  * (in a "decoy" round) a different word under the same hint and no warning. The
  * phone is passed around once more so each player privately sees their screen,
@@ -115,6 +117,10 @@ const OPENS_WINDOW_MS = 10 * 60 * 1000;
  * @property {Player[]} players             Everyone at the table, sitting out or not, in seat order.
  * @property {Settings} settings
  * @property {PoolEntry[]} pool              Words (display form), duplicates allowed; consumed as rounds are built.
+ * @property {string | null} playHint        Normalised hint the next round draws from, or null for
+ *                                           the whole pool; never '' (words with no hint aren't a
+ *                                           category). Kept while it has words; Home clears it
+ *                                           once they run out.
  * @property {PageOpen[]} opens              Entry-page opens, oldest first; pruned to OPENS_WINDOW_MS.
  * @property {Round | null} round            The current round (during hint/reveal/play/result).
  * @property {number} turn                   0-based seat: into `players` for whose page is open
@@ -499,6 +505,7 @@ const state = {
   players: defaultPlayers(),
   settings: defaultSettings(),
   pool: [],
+  playHint: null,
   opens: [],
   round: null,
   turn: 0,
@@ -522,6 +529,7 @@ function save() {
       players: state.players,
       settings: state.settings,
       pool: state.pool,
+      playHint: state.playHint,
       opens: recentOpens(state.opens),
       round: state.round,
       turn: state.turn,
@@ -560,6 +568,7 @@ function load() {
     if (Array.isArray(data.pool)) {
       state.pool = parseEntries(data.pool).filter((e) => playerById(e.by));
     }
+    state.playHint = typeof data.playHint === 'string' ? data.playHint : null;
     if (Array.isArray(data.opens)) {
       state.opens = recentOpens(parseOpens(data.opens)).filter((o) => playerById(o.id));
     }
@@ -812,15 +821,22 @@ function goEntry() {
 }
 
 /**
- * Build a round from the current pool and show its hint. The round consumes
- * words, so the depleted pool is written back to state.
+ * Build a round and show its hint. The round draws from the chosen hint's
+ * words when one is chosen (and still has words), else from the whole pool —
+ * and consumes what it draws, so the depleted pool is written back to state.
  */
 function startRound() {
   const seats = activePlayers().map((p) => p.id);
-  if (state.pool.length === 0 || seats.length < MIN_PLAYERS) return;
-  const { round, pool } = buildRound(seats, state.pool, state.settings);
+  const draw = drawPool();
+  if (draw.length === 0 || seats.length < MIN_PLAYERS) return;
+  const { round, pool } = buildRound(seats, draw, state.settings);
+  // buildRound hands back the drawn-from words it didn't use, as the same
+  // objects: whatever's missing was consumed. Drop just those from the full
+  // pool, so words under other hints stay put and in order.
+  const used = new Set(draw);
+  for (const e of pool) used.delete(e);
+  state.pool = state.pool.filter((e) => !used.has(e));
   state.round = round;
-  state.pool = pool;
   state.phase = 'hint';
   render();
 }
@@ -895,6 +911,10 @@ function renderHome() {
   });
   catField.append(catInput);
   screen.append(catField);
+
+  // Play from — which hint the next round draws from, once there's a choice.
+  const playFrom = renderPlayFrom();
+  if (playFrom) screen.append(playFrom);
 
   // Advanced settings (collapsible).
   screen.append(renderAdvanced());
@@ -1150,6 +1170,58 @@ function kebabMenu(label, items) {
   return { button, menu };
 }
 
+/**
+ * The Home "Play from" picker: one pill per category in the pool — a hint
+ * with two or more words — plus Any. Words with no hint aren't a category:
+ * they only ever come up under Any. Rounds draw only from the chosen one, so
+ * the table can work through a theme; Any is the default, and the picker only
+ * appears when there's a category to choose and other words to leave out. A
+ * chosen category stays listed down to its last word, so a theme can be
+ * finished; once it's used up the pick is cleared here — on the screen that
+ * shows it — so it can't silently spring back to life when words under that
+ * hint are added later.
+ *
+ * @returns {HTMLElement | null}
+ */
+function renderPlayFrom() {
+  const hints = poolHints();
+  if (state.playHint !== null && !hints.has(state.playHint)) state.playHint = null;
+  const listed = [...hints].filter(([key, count]) => key && (count >= 2 || key === state.playHint));
+  if (listed.length === 0 || hints.size < 2) return null;
+
+  const field = el('section', 'field field--picks');
+  const labelWrap = el('div', 'field__labelwrap');
+  labelWrap.append(el('span', 'field__label', 'Play from'));
+  labelWrap.append(el('span', 'field__note', 'Which category the next round draws from'));
+  field.append(labelWrap);
+
+  const row = el('div', 'picks');
+  row.setAttribute('role', 'group');
+  row.setAttribute('aria-label', 'Play from');
+  /**
+   * @param {string} label
+   * @param {string | null} key
+   * @param {number | null} count
+   */
+  const pill = (label, key, count) => {
+    const b = el('button', 'pick');
+    b.append(el('span', 'pick__label', label));
+    if (count !== null) b.append(el('span', 'pick__count', String(count)));
+    const selected = state.playHint === key;
+    b.classList.toggle('pick--selected', selected);
+    b.setAttribute('aria-pressed', String(selected));
+    b.addEventListener('click', () => {
+      state.playHint = key;
+      render();
+    });
+    row.append(b);
+  };
+  pill('Any', null, null);
+  for (const [key, count] of listed) pill(displayForm(key), key, count);
+  field.append(row);
+  return field;
+}
+
 function renderAdvanced() {
   const wrap = el('section', 'advanced');
   const toggle = el(
@@ -1289,25 +1361,74 @@ function wordCountLabel(n) {
 }
 
 /**
+ * The hint the next round draws from: the host's pick, or null for the whole
+ * pool — also null while the pick has no words left, so it quietly acts as
+ * Any until Home clears it.
+ *
+ * @returns {string | null}
+ */
+function chosenHintKey() {
+  const key = state.playHint;
+  if (key === null) return null;
+  return state.pool.some((e) => normaliseWord(e.hint) === key) ? key : null;
+}
+
+/**
+ * The words the next round can draw: those under the chosen hint, or all.
+ *
+ * @returns {PoolEntry[]}
+ */
+function drawPool() {
+  const key = chosenHintKey();
+  return key === null ? state.pool : state.pool.filter((e) => normaliseWord(e.hint) === key);
+}
+
+/**
+ * How many pool words carry each hint, keyed by normalised hint: the host's
+ * category first, then A–Z, the no-hint group ('') last.
+ *
+ * @returns {Map<string, number>}
+ */
+function poolHints() {
+  /** @type {Map<string, number>} */
+  const counts = new Map();
+  for (const e of state.pool) {
+    const k = normaliseWord(e.hint);
+    counts.set(k, (counts.get(k) ?? 0) + 1);
+  }
+  const cat = normaliseWord(state.settings.category);
+  const rank = /** @param {string} k */ (k) => (k === cat ? 0 : k === '' ? 2 : 1);
+  return new Map(
+    [...counts.entries()].sort(([a], [b]) => rank(a) - rank(b) || a.localeCompare(b)),
+  );
+}
+
+/**
  * A fairness warning about the pool, or null when there's nothing to flag.
  *
- * When every word left came from one player, a round that makes them the
+ * When every word the next round can draw — the whole pool, or just the
+ * chosen hint's words — came from one player, a round that makes them the
  * impostor has no choice but to use one of their own words as the secret — and
  * the hint would tell them which. Shown wherever a round can be started, and
- * on the roster where it gets fixed. Deliberately vague: it nudges the table
- * to top up the pool without naming who's carrying it.
+ * on the roster where it gets fixed. For the whole pool it's deliberately
+ * vague: it nudges the table to top up the pool without naming who's carrying
+ * it. Playing from one category it names them — the table chose that category
+ * on purpose, and fixing it means knowing whose words it's leaning on.
  *
  * @returns {string | null}
  */
 function lonePoolWarning() {
-  if (state.pool.length === 0) return null;
-  const by = new Set(state.pool.map((e) => e.by));
+  const draw = drawPool();
+  if (draw.length === 0) return null;
+  const by = new Set(draw.map((e) => e.by));
   if (by.size !== 1) return null;
   const [id] = by;
   const p = playerById(id);
   // A sitter's words are nobody's at the table, so they're never a problem.
   if (!p || p.out) return null;
-  return 'The pool is short on words.';
+  const key = chosenHintKey();
+  if (key === null) return 'The pool is short on words.';
+  return `Only ${p.name} has words in ${displayForm(key)}.`;
 }
 
 /**
@@ -1750,17 +1871,22 @@ function renderResult() {
   screen.append(card);
 
   // How many words remain (rounds consume them) — always shown so you know
-  // whether there's anything left to Play again with.
+  // whether there's anything left to Play again with. Playing from one hint,
+  // say how many of those are left, or that Play again falls back to the whole
+  // pool now they've run out (Home clears the pick).
   const left = state.pool.length;
-  screen.append(
-    el(
-      'p',
-      'screen__hint',
-      left === 0
-        ? 'Pool empty — go home to add words.'
-        : `${left} ${left === 1 ? 'word' : 'words'} left in the pool.`,
-    ),
-  );
+  const key = state.playHint;
+  let leftLine =
+    left === 0 ? 'Pool empty — go home to add words' : `${wordCountLabel(left)} left in the pool`;
+  if (left > 0 && key) {
+    const n = state.pool.filter((e) => normaliseWord(e.hint) === key).length;
+    const cat = displayForm(key);
+    leftLine +=
+      n > 0
+        ? `, ${n} of them ${cat}`
+        : `, none of them ${cat} — Play again draws from the whole pool`;
+  }
+  screen.append(el('p', 'screen__hint', `${leftLine}.`));
   const warn = lonePoolWarningEl();
   if (warn) screen.append(warn);
 

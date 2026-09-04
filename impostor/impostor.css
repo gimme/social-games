@@ -267,6 +267,59 @@
   color: var(--danger);
 }
 
+/*
+ * Play-from picker — which hint the next round draws from. One pill per hint
+ * in the pool (plus Any), each with its word count; the chosen one is outlined.
+ */
+.field--picks {
+  flex-direction: column;
+  align-items: stretch;
+  gap: var(--space-2);
+}
+
+.picks {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.pick {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-height: 2.25rem;
+  padding: var(--space-1) var(--space-3);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--bg-elevated);
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  font-size: 0.78rem;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.pick:hover {
+  color: var(--text);
+}
+
+.pick:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.pick--selected,
+.pick--selected:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.pick__count {
+  opacity: 0.75;
+  font-variant-numeric: tabular-nums;
+}
+
 /* Advanced settings */
 .advanced {
   display: flex;
