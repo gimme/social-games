@@ -936,9 +936,7 @@ function renderHome() {
   if (hasWords) {
     const clear = el('button', 'btn btn--ghost', 'Clear words');
     clear.addEventListener('click', () => {
-      const ok = window.confirm(
-        'Clear the word pool? Your settings (players, category, odds) are kept.',
-      );
+      const ok = window.confirm(`Clear all ${wordCountLabel(wordCount)} from the pool?`);
       if (!ok) return;
       state.pool = [];
       state.opens = [];
@@ -1296,7 +1294,8 @@ function wordCountLabel(n) {
  * When every word left came from one player, a round that makes them the
  * impostor has no choice but to use one of their own words as the secret — and
  * the hint would tell them which. Shown wherever a round can be started, and
- * on the roster where it gets fixed.
+ * on the roster where it gets fixed. Deliberately vague: it nudges the table
+ * to top up the pool without naming who's carrying it.
  *
  * @returns {string | null}
  */
@@ -1308,7 +1307,7 @@ function lonePoolWarning() {
   const p = playerById(id);
   // A sitter's words are nobody's at the table, so they're never a problem.
   if (!p || p.out) return null;
-  return `Only ${p.name} has words in the pool.`;
+  return 'The pool is short on words.';
 }
 
 /**
