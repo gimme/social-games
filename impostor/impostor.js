@@ -985,9 +985,9 @@ function lonePoolWarningEl() {
  * The entry roster: one tile per player. Each player taps their own to open
  * their private page — in any order, as often as they like — so there's no
  * pass-around to sit through, and anyone can come back later for more. The
- * roster doubles as the "safe" screen between players: it shows who has words
- * in the pool (so the table can see who still needs to go) but never which
- * words, nor how many.
+ * roster doubles as the "safe" screen between players: each tile's dot shows
+ * how its player stands in the pool — none, one, or more words — so the table
+ * can see who still needs a go, but never which words nor an exact count.
  */
 function renderRoster() {
   const screen = el('section', 'screen');
@@ -1002,16 +1002,15 @@ function renderRoster() {
 
   const grid = el('div', 'players');
   for (let p = 0; p < state.playerCount; p++) {
-    const hasWords = wordsBy(p).length > 0;
-    const tile = el('button', 'player');
+    // Grey dot: nothing in the pool. Yellow: down to one word. Green: two or more.
+    const count = wordsBy(p).length;
+    const status = count === 0 ? 'empty' : count === 1 ? 'low' : 'stocked';
+    const tile = el('button', `player player--${status}`);
     /** @type {HTMLButtonElement} */ (tile).type = 'button';
+    // On screen the status is just a coloured dot; spell it out for screen readers.
+    const spoken = { empty: 'no words yet', low: 'one word left', stocked: 'has words' }[status];
+    tile.setAttribute('aria-label', `Player ${p + 1}, ${spoken}`);
     tile.append(el('span', 'player__name', `Player ${p + 1}`));
-    if (hasWords) {
-      tile.classList.add('player--has-words');
-      tile.append(el('span', 'player__status', '✓ Has words'));
-    } else {
-      tile.append(el('span', 'player__status', 'No words'));
-    }
     tile.addEventListener('click', () => {
       state.turn = p;
       state.gateOpen = true;

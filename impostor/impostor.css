@@ -323,7 +323,11 @@
   font-weight: 800;
 }
 
-/* Entry roster — one tile per player; tap your own to open your page. */
+/*
+ * Entry roster — one tile per player; tap your own to open your page. A small
+ * dot beside the name is the whole status: grey with no words in the pool,
+ * yellow when down to one, green with two or more. No text, no exact counts.
+ */
 .players {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -332,16 +336,36 @@
 
 .player {
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-1);
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  min-height: 3.5rem;
   padding: var(--space-3) var(--space-4);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   background: var(--bg-card);
   color: var(--text);
-  text-align: left;
   transition: transform 0.04s ease, border-color 0.15s ease;
+}
+
+.player::before {
+  content: '';
+  flex: 0 0 auto;
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: var(--text-muted);
+  opacity: 0.45;
+}
+
+.player--low::before {
+  background: var(--warning);
+  opacity: 1;
+}
+
+.player--stocked::before {
+  background: var(--success);
+  opacity: 1;
 }
 
 .player:hover {
@@ -360,15 +384,6 @@
 .player__name {
   font-size: 1.05rem;
   font-weight: 700;
-}
-
-.player__status {
-  color: var(--text-muted);
-  font-size: 0.85rem;
-}
-
-.player--has-words .player__status {
-  color: var(--success);
 }
 
 /* Entry — word input, hint input, chips grouped by hint */
