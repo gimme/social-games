@@ -18,8 +18,10 @@
  * The pool depletes as you play: every word a round draws — the crew's real word
  * and any decoys — is removed, so it won't come up again until you add more.
  * Duplicates are allowed (every entered word counts). Each word remembers who
- * added it, used for one fairness rule: a round won't hand an impostor the very
- * word they typed (unless that's all that's left).
+ * added it, used for two fairness rules: a round won't hand an impostor the very
+ * word they typed (unless that's all that's left), and the crew's word is drawn
+ * by player before word, so typing more words doesn't make yours come up more
+ * often.
  *
  * Self-contained: this game imports nothing and is the only script on its page.
  *
@@ -222,7 +224,8 @@ function impostorCountForType(type, n) {
  * roles go out — so everything drawn for the round must share it, or a player's
  * word would contradict the screen and out them:
  *  - The real word is never one an impostor in THIS round contributed — unless
- *    the only words left are theirs (graceful fallback).
+ *    the only words left are theirs (graceful fallback). Among the rest it is
+ *    drawn by PLAYER first, then word, so one prolific typist doesn't hog it.
  *  - Decoys carry the real word's hint, differ from the real word (hard
  *    constraint), and differ from each other when the pool allows. Too few such
  *    words => the round falls back to overt impostors.
@@ -259,17 +262,31 @@ function buildRound(n, pool, settings) {
     return out;
   };
 
-  /** @returns {Map<string, number[]>} Indices into `work`, grouped by hint. */
-  const groupsByHint = () => {
-    /** @type {Map<string, number[]>} */
+  /**
+   * Group indices into `work` by a key of their entry, in first-seen order.
+   *
+   * @template K
+   * @param {number[]} idx
+   * @param {(e: PoolEntry) => K} key
+   * @returns {Map<K, number[]>}
+   */
+  const groupBy = (idx, key) => {
+    /** @type {Map<K, number[]>} */
     const groups = new Map();
-    work.forEach((e, i) => {
-      const g = groups.get(hintKey(e));
+    for (const i of idx) {
+      const k = key(work[i]);
+      const g = groups.get(k);
       if (g) g.push(i);
-      else groups.set(hintKey(e), [i]);
-    });
+      else groups.set(k, [i]);
+    }
     return groups;
   };
+
+  /** @returns {number[]} Every index into `work`. */
+  const allIdx = () => work.map((_, i) => i);
+
+  /** @returns {Map<string, number[]>} Indices into `work`, grouped by hint. */
+  const groupsByHint = () => groupBy(allIdx(), hintKey);
 
   /** @param {number} i @returns {PoolEntry} Draw (remove and return) one entry. */
   const take = (i) => work.splice(i, 1)[0];
@@ -332,15 +349,15 @@ function buildRound(n, pool, settings) {
 
     // Real word: prefer words NOT contributed by an impostor this round; fall
     // back to the whole pool only if every remaining word is an impostor's.
+    // Draw a player uniformly, then one of their words uniformly.
     /** @type {PoolEntry | null} */
     let real = null;
     if (work.length > 0) {
-      const crewIdx = [];
-      for (let i = 0; i < work.length; i++) {
-        if (!impostorSet.has(work[i].by)) crewIdx.push(i);
-      }
-      const pickFrom = crewIdx.length > 0 ? crewIdx : work.map((_, i) => i);
-      real = take(pickFrom[randInt(pickFrom.length)]);
+      const crewIdx = allIdx().filter((i) => !impostorSet.has(work[i].by));
+      const pickFrom = crewIdx.length > 0 ? crewIdx : allIdx();
+      const byPlayer = [...groupBy(pickFrom, (e) => e.by).values()];
+      const theirs = byPlayer[randInt(byPlayer.length)];
+      real = take(theirs[randInt(theirs.length)]);
       realWord = real.word;
       hint = real.hint;
     }
