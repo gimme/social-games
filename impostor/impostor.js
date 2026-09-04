@@ -888,7 +888,7 @@ function renderHome() {
   catLabel.append(el('span', 'field__label', 'Category'));
   catLabel.append(el('span', 'field__note', 'Default hint for new words'));
   catField.append(catLabel);
-  const catInput = upperInput('Optional, e.g. MOVIES', state.settings.category);
+  const catInput = upperInput('Optional, e.g. MOVIE', state.settings.category);
   catInput.addEventListener('input', () => {
     state.settings.category = catInput.value;
     save();
