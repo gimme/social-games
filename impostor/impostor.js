@@ -1532,14 +1532,10 @@ function renderEntry() {
   /** Add the current input to the pool under this player's name. */
   const addWord = () => {
     const raw = input.value;
-    const norm = normaliseWord(raw);
     input.value = '';
     input.focus();
-    if (!norm) return;
-    // Reject only an exact duplicate among this player's OWN words (so a
-    // double-tap doesn't bloat their list). Duplicates across players are kept —
-    // every word entered ends up in the pool.
-    if (wordsBy(me).some((e) => normaliseWord(e.word) === norm)) return;
+    if (!normaliseWord(raw)) return;
+    // No dedup: every word entered goes in, even a repeat by the same player.
     state.pool.push({
       word: displayForm(raw),
       hint: displayForm(state.entryHint),
