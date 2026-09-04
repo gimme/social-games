@@ -1455,29 +1455,57 @@ function renderEntry() {
   hintInput.classList.add('entry__hintinput');
   hintInput.addEventListener('input', () => {
     state.entryHint = hintInput.value;
+    markSelectedHint();
   });
   hintRow.append(hintInput);
   form.append(row, hintRow);
 
-  // This player's words, grouped under their hints — the host's category first,
-  // then any hints the player typed themselves, in the order they appeared.
+  // This player's words, grouped under their hints — the host's category first
+  // (always shown, even before any words carry it, so the default hint is
+  // visible and one tap away), then any hints the player typed themselves, in
+  // the order they appeared. Each group's title is a button that copies its
+  // hint into the hint input; the title matching the input is marked selected.
   const groupsEl = el('div', 'chipgroups');
+  const markSelectedHint = () => {
+    const current = normaliseWord(hintInput.value);
+    for (const title of groupsEl.querySelectorAll('.chipgroup__title')) {
+      const selected = title.getAttribute('data-hint') === current;
+      title.classList.toggle('chipgroup__title--selected', selected);
+      title.setAttribute('aria-pressed', String(selected));
+    }
+  };
   const renderChips = () => {
     groupsEl.replaceChildren();
     const catKey = normaliseWord(state.settings.category);
-    /** @type {Map<string, PoolEntry[]>} */
+    /** @type {Map<string, { hint: string, entries: PoolEntry[] }>} */
     const groups = new Map();
+    if (catKey) groups.set(catKey, { hint: displayForm(state.settings.category), entries: [] });
     for (const e of wordsBy(me)) {
       const g = groups.get(normaliseWord(e.hint));
-      if (g) g.push(e);
-      else groups.set(normaliseWord(e.hint), [e]);
+      if (g) g.entries.push(e);
+      else groups.set(normaliseWord(e.hint), { hint: e.hint, entries: [e] });
     }
     const ordered = [...groups.entries()].sort(
       ([a], [b]) => Number(b === catKey) - Number(a === catKey),
     );
-    for (const [, entries] of ordered) {
+    for (const [key, { hint, entries }] of ordered) {
       const group = el('div', 'chipgroup');
-      group.append(el('span', 'chipgroup__title', entries[0].hint || 'No hint'));
+      const title = el('button', 'chipgroup__title', hint || 'No hint');
+      /** @type {HTMLButtonElement} */ (title).type = 'button';
+      title.setAttribute('data-hint', key);
+      title.setAttribute('aria-label', hint ? `Use hint ${hint}` : 'Use no hint');
+      title.addEventListener('click', () => {
+        hintInput.value = hint;
+        state.entryHint = hint;
+        markSelectedHint();
+        input.focus();
+      });
+      group.append(title);
+      if (entries.length === 0) {
+        group.append(el('span', 'chipgroup__empty', 'No words yet'));
+        groupsEl.append(group);
+        continue;
+      }
       const chips = el('div', 'chips');
       for (const e of entries) {
         const chip = el('span', 'chip');
@@ -1498,6 +1526,7 @@ function renderEntry() {
       group.append(chips);
       groupsEl.append(group);
     }
+    markSelectedHint();
   };
 
   /** Add the current input to the pool under this player's name. */

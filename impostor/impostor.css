@@ -643,12 +643,40 @@
   gap: var(--space-2);
 }
 
+/* A group's hint: tap to copy it into the hint input. The one matching the
+   input is marked selected. */
 .chipgroup__title {
+  align-self: flex-start;
+  /* Pull the pill's padding back so the text stays flush with the chips. */
+  margin: 0 0 0 calc(-1 * var(--space-2));
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: none;
   color: var(--text-muted);
+  text-align: left;
   text-transform: uppercase;
   letter-spacing: 0.08em;
   font-size: 0.78rem;
   font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.chipgroup__title:hover {
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.chipgroup__title--selected,
+.chipgroup__title--selected:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.chipgroup__empty {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-style: italic;
 }
 
 .chips {
