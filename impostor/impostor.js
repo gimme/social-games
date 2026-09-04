@@ -23,6 +23,12 @@
  * by player before word, so typing more words doesn't make yours come up more
  * often.
  *
+ * Players are kept by id, so they can be renamed, added and removed at will
+ * without the pool losing track of whose words are whose. A player can also
+ * SIT OUT: they stay on the roster with their words, but no role is dealt to
+ * them until they rejoin — and since nobody being dealt in typed those words,
+ * they're the fairest ones there are.
+ *
  * The phone can't tell who's holding it, so nothing stops a player opening
  * someone else's page. Instead the roster keeps a short history of which pages
  * were opened and how long ago, so a peek doesn't go unnoticed by the table.
@@ -36,8 +42,9 @@
 const MIN_PLAYERS = 3;
 const MAX_PLAYERS = 12;
 const DEFAULT_PLAYERS = 4;
+const NAME_MAX = 20;
 
-const STORAGE_KEY = 'impostor.v3';
+const STORAGE_KEY = 'impostor.v4';
 
 /** How far back the roster's "opened" history reaches. */
 const OPENS_WINDOW_MS = 10 * 60 * 1000;
@@ -56,6 +63,15 @@ const OPENS_WINDOW_MS = 10 * 60 * 1000;
  */
 
 /**
+ * Someone at the table. Kept by id, so a rename never orphans a word.
+ *
+ * @typedef {Object} Player
+ * @property {string} id      Stable and never reused.
+ * @property {string} name    Display name, as typed.
+ * @property {boolean} out    Sitting out: still on the roster, words kept, but dealt no role.
+ */
+
+/**
  * @typedef {Object} Assignment
  * @property {string | null} word   The word this player sees; null => overt impostor.
  * @property {boolean} impostor     Whether this player is an impostor.
@@ -67,7 +83,7 @@ const OPENS_WINDOW_MS = 10 * 60 * 1000;
  * @typedef {Object} PoolEntry
  * @property {string} word   Display (upper-case) form.
  * @property {string} hint   Display (upper-case) hint it was added under; '' for none.
- * @property {number} by     Entry player index that added it; -1 if unknown.
+ * @property {string} by     Id of the player who added it.
  */
 
 /**
@@ -76,7 +92,7 @@ const OPENS_WINDOW_MS = 10 * 60 * 1000;
  * so a refresh or a closed tab can't dodge it.
  *
  * @typedef {Object} PageOpen
- * @property {number} p   Player index whose page was opened.
+ * @property {string} id  Player whose page was opened.
  * @property {number} t   When (epoch ms).
  */
 
@@ -88,25 +104,28 @@ const OPENS_WINDOW_MS = 10 * 60 * 1000;
  * @property {string} hint                   Shown to the whole table before roles go out; '' for none.
  * @property {PoolEntry[]} decoys            Entries handed out as decoy words. Returned to the
  *                                           pool if the round is skipped (the real word stays used up).
- * @property {number} starter                Player index who starts the clues.
- * @property {Assignment[]} assignments      Per-player index.
+ * @property {string[]} players              Ids of those dealt in, in seat order.
+ * @property {number} starter                Seat (index into players) who starts the clues.
+ * @property {Assignment[]} assignments      Per seat: assignments[i] belongs to players[i].
  */
 
 /**
  * @typedef {Object} GameState
  * @property {'home' | 'entry' | 'hint' | 'reveal' | 'play' | 'result'} phase
- * @property {number} playerCount
+ * @property {Player[]} players             Everyone at the table, sitting out or not, in seat order.
  * @property {Settings} settings
  * @property {PoolEntry[]} pool              Words (display form), duplicates allowed; consumed as rounds are built.
  * @property {PageOpen[]} opens              Entry-page opens, oldest first; pruned to OPENS_WINDOW_MS.
  * @property {Round | null} round            The current round (during hint/reveal/play/result).
- * @property {number} turn                   0-based player index: whose page is open (entry) or
- *                                           whose turn it is (reveal pass-around).
+ * @property {number} turn                   0-based seat: into `players` for whose page is open
+ *                                           (entry), into `round.players` for whose turn it is
+ *                                           (reveal pass-around).
  * @property {boolean} gateOpen              Whether a player has been picked (entry) or the
  *                                           current player's pass gate is passed (reveal).
  * @property {string} entryHint              Hint the next word gets; starts as the category
  *                                           each time a player opens their page.
  * @property {boolean} advancedOpen          Whether the advanced settings are expanded.
+ * @property {string | null} editing         Id of the player whose name is being edited on Home.
  */
 
 // --- pure helpers (DOM-free) ----------------------------------------------
@@ -279,12 +298,13 @@ function impostorCountForType(type, n) {
  *    a hint only YOUR words carry could never be a crew word's, so seeing it as
  *    the impostor would give the twist away. No such hint => a normal round.
  *
- * @param {number} n
+ * @param {string[]} players   Ids of those dealt in, in seat order.
  * @param {PoolEntry[]} pool
  * @param {Settings} settings
  * @returns {{ round: Round, pool: PoolEntry[] }}
  */
-function buildRound(n, pool, settings) {
+function buildRound(players, pool, settings) {
+  const n = players.length;
   const work = pool.slice();
   const wordKey = /** @param {PoolEntry} e */ (e) => normaliseWord(e.word);
   const hintKey = /** @param {PoolEntry} e */ (e) => normaliseWord(e.hint);
@@ -390,6 +410,7 @@ function buildRound(n, pool, settings) {
     // normal / two-impostor / no-impostor (and the everyone-impostor fallback).
     const impostorCount = impostorCountForType(type, n);
     const impostorSet = new Set(sampleIndices(n, impostorCount));
+    const impostorIds = new Set([...impostorSet].map((i) => players[i]));
 
     // Real word: prefer words NOT contributed by an impostor this round; fall
     // back to the whole pool only if every remaining word is an impostor's.
@@ -397,7 +418,7 @@ function buildRound(n, pool, settings) {
     /** @type {PoolEntry | null} */
     let real = null;
     if (work.length > 0) {
-      const crewIdx = allIdx().filter((i) => !impostorSet.has(work[i].by));
+      const crewIdx = allIdx().filter((i) => !impostorIds.has(work[i].by));
       const pickFrom = crewIdx.length > 0 ? crewIdx : allIdx();
       const byPlayer = [...groupBy(pickFrom, (e) => e.by).values()];
       const theirs = byPlayer[randInt(byPlayer.length)];
@@ -441,7 +462,7 @@ function buildRound(n, pool, settings) {
   const starter = randInt(n);
 
   return {
-    round: { type, decoy, realWord, hint, decoys, starter, assignments },
+    round: { type, decoy, realWord, hint, decoys, players, starter, assignments },
     pool: work,
   };
 }
@@ -457,10 +478,25 @@ function defaultSettings() {
   return { category: '', nonePct: 0, everyonePct: 0, twoPct: 0, decoyPct: 0 };
 }
 
+/** @returns {string} A fresh player id; random enough never to collide at one table. */
+function newId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
+}
+
+/** @returns {Player[]} A fresh table of DEFAULT_PLAYERS placeholder-named players. */
+function defaultPlayers() {
+  /** @type {Player[]} */
+  const players = [];
+  for (let i = 0; i < DEFAULT_PLAYERS; i++) {
+    players.push({ id: newId(), name: `Player ${i + 1}`, out: false });
+  }
+  return players;
+}
+
 /** @type {GameState} */
 const state = {
   phase: 'home',
-  playerCount: DEFAULT_PLAYERS,
+  players: defaultPlayers(),
   settings: defaultSettings(),
   pool: [],
   opens: [],
@@ -469,6 +505,7 @@ const state = {
   gateOpen: false,
   entryHint: '',
   advancedOpen: false,
+  editing: null,
 };
 
 // --- persistence -----------------------------------------------------------
@@ -482,7 +519,7 @@ function save() {
     /** @type {Record<string, unknown>} */
     const data = {
       phase: state.phase,
-      playerCount: state.playerCount,
+      players: state.players,
       settings: state.settings,
       pool: state.pool,
       opens: recentOpens(state.opens),
@@ -508,9 +545,7 @@ function load() {
   if (!data || typeof data !== 'object') return;
 
   try {
-    if (typeof data.playerCount === 'number') {
-      state.playerCount = clamp(data.playerCount, MIN_PLAYERS, MAX_PLAYERS);
-    }
+    if (Array.isArray(data.players)) state.players = parsePlayers(data.players);
     if (data.settings && typeof data.settings === 'object') {
       const s = data.settings;
       state.settings = {
@@ -521,13 +556,25 @@ function load() {
         decoyPct: clampPct(s.decoyPct),
       };
     }
-    if (Array.isArray(data.pool)) state.pool = parseEntries(data.pool);
-    if (Array.isArray(data.opens)) state.opens = recentOpens(parseOpens(data.opens));
+    // Words and opens belong to players on the roster; anything else is noise.
+    if (Array.isArray(data.pool)) {
+      state.pool = parseEntries(data.pool).filter((e) => playerById(e.by));
+    }
+    if (Array.isArray(data.opens)) {
+      state.opens = recentOpens(parseOpens(data.opens)).filter((o) => playerById(o.id));
+    }
     if (data.round && typeof data.round === 'object') {
       const r = data.round;
       if (typeof r.hint !== 'string') r.hint = '';
       r.decoys = Array.isArray(r.decoys) ? parseEntries(r.decoys) : [];
-      state.round = /** @type {Round} */ (r);
+      // The seats must line up with the assignments, or the pass-around would
+      // hand out the wrong screens.
+      const seated =
+        Array.isArray(r.players) &&
+        Array.isArray(r.assignments) &&
+        r.players.length === r.assignments.length &&
+        r.players.every((/** @type {unknown} */ id) => typeof id === 'string');
+      if (seated) state.round = /** @type {Round} */ (r);
     }
 
     const phase = data.phase;
@@ -544,7 +591,9 @@ function load() {
     // Always reset any pass-around to a safe gate (the roster during entry,
     // the pass-gate during reveal) so no player's screen can flash on refresh.
     const turn = typeof data.turn === 'number' ? data.turn : 0;
-    state.turn = clamp(turn, 0, Math.max(0, state.playerCount - 1));
+    const seats =
+      state.phase === 'reveal' && state.round ? state.round.players.length : state.players.length;
+    state.turn = clamp(turn, 0, Math.max(0, seats - 1));
     state.gateOpen = false;
     state.entryHint = '';
   } catch {
@@ -566,7 +615,7 @@ function parseEntries(items) {
     out.push({
       word: e.word,
       hint: typeof e.hint === 'string' ? e.hint : '',
-      by: typeof e.by === 'number' && Number.isInteger(e.by) ? e.by : -1,
+      by: typeof e.by === 'string' ? e.by : '',
     });
   }
   return out;
@@ -582,9 +631,29 @@ function parseOpens(items) {
   for (const item of items) {
     if (!item || typeof item !== 'object') continue;
     const o = /** @type {Record<string, unknown>} */ (item);
-    if (typeof o.p !== 'number' || !Number.isInteger(o.p)) continue;
+    if (typeof o.id !== 'string') continue;
     if (typeof o.t !== 'number' || !Number.isFinite(o.t)) continue;
-    out.push({ p: o.p, t: o.t });
+    out.push({ id: o.id, t: o.t });
+  }
+  return out;
+}
+
+/**
+ * @param {unknown[]} items
+ * @returns {Player[]} The well-formed players among `items`; a duplicate id keeps its first.
+ */
+function parsePlayers(items) {
+  /** @type {Player[]} */
+  const out = [];
+  const seen = new Set();
+  for (const item of items) {
+    if (!item || typeof item !== 'object') continue;
+    const p = /** @type {Record<string, unknown>} */ (item);
+    if (typeof p.id !== 'string' || !p.id || seen.has(p.id)) continue;
+    if (typeof p.name !== 'string') continue;
+    seen.add(p.id);
+    out.push({ id: p.id, name: p.name, out: p.out === true });
+    if (out.length >= MAX_PLAYERS) break;
   }
   return out;
 }
@@ -685,35 +754,6 @@ function progressDots(total, current) {
 }
 
 /**
- * A labelled +/- number control.
- *
- * @param {string} label
- * @param {number} value
- * @param {number} min
- * @param {number} max
- * @param {(value: number) => void} onChange
- * @returns {HTMLElement}
- */
-function stepper(label, value, min, max, onChange) {
-  const field = el('div', 'field');
-  field.append(el('span', 'field__label', label));
-
-  const control = el('div', 'stepper');
-  const dec = el('button', 'stepper__btn', '−');
-  const val = el('span', 'stepper__value', String(value));
-  const inc = el('button', 'stepper__btn', '+');
-
-  /** @type {HTMLButtonElement} */ (dec).disabled = value <= min;
-  /** @type {HTMLButtonElement} */ (inc).disabled = value >= max;
-  dec.addEventListener('click', () => onChange(Math.max(min, value - 1)));
-  inc.addEventListener('click', () => onChange(Math.min(max, value + 1)));
-
-  control.append(dec, val, inc);
-  field.append(control);
-  return field;
-}
-
-/**
  * A labelled percentage stepper (0..100 in steps of 5).
  *
  * @param {string} label
@@ -776,8 +816,9 @@ function goEntry() {
  * words, so the depleted pool is written back to state.
  */
 function startRound() {
-  if (state.pool.length === 0) return;
-  const { round, pool } = buildRound(state.playerCount, state.pool, state.settings);
+  const seats = activePlayers().map((p) => p.id);
+  if (state.pool.length === 0 || seats.length < MIN_PLAYERS) return;
+  const { round, pool } = buildRound(seats, state.pool, state.settings);
   state.round = round;
   state.pool = pool;
   state.phase = 'hint';
@@ -838,12 +879,7 @@ function renderHome() {
     );
   }
 
-  screen.append(
-    stepper('Players', state.playerCount, MIN_PLAYERS, MAX_PLAYERS, (v) => {
-      state.playerCount = v;
-      render();
-    }),
-  );
+  screen.append(renderLineup());
 
   // Category — the default hint on every word added from now on. Words already
   // in the pool keep the hint they were added under, so it can change any time.
@@ -887,8 +923,9 @@ function renderHome() {
     screen.append(el('p', 'screen__lede', 'No words in the pool yet.'));
   }
 
+  const tooFew = activePlayers().length < MIN_PLAYERS;
   const start = el('button', 'btn', 'Start round');
-  /** @type {HTMLButtonElement} */ (start).disabled = !hasWords;
+  /** @type {HTMLButtonElement} */ (start).disabled = !hasWords || tooFew;
   start.addEventListener('click', () => startRound());
   screen.append(start);
 
@@ -913,8 +950,206 @@ function renderHome() {
   } else {
     screen.append(el('p', 'screen__hint', 'Add words to start.'));
   }
+  if (tooFew) {
+    screen.append(
+      el(
+        'p',
+        'screen__hint screen__hint--warn',
+        `Needs at least ${MIN_PLAYERS} players playing to start.`,
+      ),
+    );
+  }
 
   return screen;
+}
+
+/**
+ * The Home lineup: who's at the table, by name. Each row's ⋮ menu renames the
+ * player, sits them out (or brings them back), or removes them. Sitting out
+ * keeps the player and their words — the round just deals around them — while
+ * removing takes their words with them, so it asks first when there are any.
+ *
+ * @returns {HTMLElement}
+ */
+function renderLineup() {
+  const field = el('section', 'field field--lineup');
+  const active = activePlayers().length;
+  const out = state.players.length - active;
+
+  const labelWrap = el('div', 'field__labelwrap');
+  labelWrap.append(el('span', 'field__label', 'Players'));
+  let note = `${active} playing`;
+  if (out > 0) note += ` · ${out} sitting out`;
+  const noteEl = el('span', 'field__note', note);
+  if (active < MIN_PLAYERS) noteEl.classList.add('field__note--warn');
+  labelWrap.append(noteEl);
+  field.append(labelWrap);
+
+  const list = el('ul', 'lineup');
+  for (const p of state.players) list.append(lineupRow(p));
+  field.append(list);
+
+  const add = el('button', 'btn btn--ghost lineup__add', '+ Add player');
+  /** @type {HTMLButtonElement} */ (add).type = 'button';
+  /** @type {HTMLButtonElement} */ (add).disabled = state.players.length >= MAX_PLAYERS;
+  add.addEventListener('click', () => {
+    const player = { id: newId(), name: nextDefaultName(), out: false };
+    state.players.push(player);
+    // Straight into naming them; leaving the placeholder is fine too.
+    state.editing = player.id;
+    render();
+  });
+  field.append(add);
+
+  return field;
+}
+
+/**
+ * One lineup row: the name (or, while renaming, an input in its place), a
+ * "sitting out" tag when it applies, and the ⋮ menu.
+ *
+ * @param {Player} p
+ * @returns {HTMLElement}
+ */
+function lineupRow(p) {
+  const row = el('li', 'lineup__row');
+  if (p.out) row.classList.add('lineup__row--out');
+
+  if (state.editing === p.id) {
+    const input = /** @type {HTMLInputElement} */ (el('input', 'field__input lineup__input'));
+    input.type = 'text';
+    input.value = p.name;
+    input.maxLength = NAME_MAX;
+    input.autocomplete = 'off';
+    input.setAttribute('autocapitalize', 'words');
+    input.setAttribute('enterkeyhint', 'done');
+    input.setAttribute('aria-label', 'Player name');
+    input.dataset.autofocus = '';
+    // Enter and blur both commit; Escape cancels. A commit re-renders, which
+    // can fire a blur of its own, so make sure it only happens once.
+    let done = false;
+    /** @param {boolean} keep */
+    const finish = (keep) => {
+      if (done) return;
+      done = true;
+      if (keep) {
+        const name = input.value.trim().replace(/\s+/g, ' ');
+        if (name) p.name = name;
+      }
+      state.editing = null;
+      render();
+    };
+    input.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        finish(true);
+      } else if (e.key === 'Escape') {
+        finish(false);
+      }
+    });
+    input.addEventListener('blur', () => finish(true));
+    row.append(input);
+    return row;
+  }
+
+  row.append(el('span', 'lineup__name', p.name));
+  if (p.out) row.append(el('span', 'lineup__tag', 'Sitting out'));
+
+  const { button, menu } = kebabMenu(`Options for ${p.name}`, [
+    {
+      label: 'Rename',
+      run: () => {
+        state.editing = p.id;
+        render();
+      },
+    },
+    {
+      label: p.out ? 'Rejoin' : 'Sit out',
+      run: () => {
+        p.out = !p.out;
+        render();
+      },
+    },
+    {
+      label: 'Remove',
+      danger: true,
+      run: () => {
+        const words = wordsBy(p.id).length;
+        if (words > 0) {
+          const ok = window.confirm(`Remove ${p.name} and their ${wordCountLabel(words)}?`);
+          if (!ok) return;
+        }
+        state.players = state.players.filter((q) => q !== p);
+        state.pool = state.pool.filter((e) => e.by !== p.id);
+        state.opens = state.opens.filter((o) => o.id !== p.id);
+        render();
+      },
+    },
+  ]);
+  row.append(button, menu);
+  return row;
+}
+
+/**
+ * A ⋮ button with a small popover menu beneath it. The menu is DOM-local: it
+ * opens and closes without touching state, and every action re-renders the
+ * screen, which takes the menu with it. Tapping elsewhere or pressing Escape
+ * closes it.
+ *
+ * @param {string} label   Accessible name for the button.
+ * @param {{ label: string, run: () => void, danger?: boolean }[]} items
+ * @returns {{ button: HTMLElement, menu: HTMLElement }}
+ */
+function kebabMenu(label, items) {
+  const button = el('button', 'lineup__more', '\u22EE');
+  /** @type {HTMLButtonElement} */ (button).type = 'button';
+  button.setAttribute('aria-label', label);
+  button.setAttribute('aria-haspopup', 'menu');
+  button.setAttribute('aria-expanded', 'false');
+
+  const menu = el('div', 'menu');
+  menu.setAttribute('role', 'menu');
+  menu.hidden = true;
+
+  const close = () => {
+    menu.hidden = true;
+    button.setAttribute('aria-expanded', 'false');
+    document.removeEventListener('pointerdown', onOutside, true);
+    document.removeEventListener('keydown', onKey);
+  };
+  /** @param {Event} e */
+  const onOutside = (e) => {
+    const t = e.target;
+    if (t instanceof Node && (menu.contains(t) || button.contains(t))) return;
+    close();
+  };
+  /** @param {KeyboardEvent} e */
+  const onKey = (e) => {
+    if (e.key !== 'Escape') return;
+    close();
+    button.focus();
+  };
+  const open = () => {
+    menu.hidden = false;
+    button.setAttribute('aria-expanded', 'true');
+    document.addEventListener('pointerdown', onOutside, true);
+    document.addEventListener('keydown', onKey);
+  };
+  button.addEventListener('click', () => (menu.hidden ? open() : close()));
+
+  for (const item of items) {
+    const b = el('button', 'menu__item', item.label);
+    /** @type {HTMLButtonElement} */ (b).type = 'button';
+    if (item.danger) b.classList.add('menu__item--danger');
+    b.setAttribute('role', 'menuitem');
+    b.addEventListener('click', () => {
+      close();
+      item.run();
+    });
+    menu.append(b);
+  }
+
+  return { button, menu };
 }
 
 function renderAdvanced() {
@@ -934,7 +1169,7 @@ function renderAdvanced() {
 
   const body = el('div', 'advanced__body');
   const s = state.settings;
-  const n = state.playerCount;
+  const n = activePlayers().length;
 
   body.append(
     pctStepper('All impostors', s.everyonePct, (v) => {
@@ -986,14 +1221,15 @@ function renderAdvanced() {
 /**
  * Pass gate shown before each player's turn during a pass-around.
  *
+ * @param {number} seats   How many turns the pass-around has.
  * @param {string} label
  * @param {string} action
  * @param {() => void} onPass
  * @returns {HTMLElement}
  */
-function renderPassGate(label, action, onPass) {
+function renderPassGate(seats, label, action, onPass) {
   const screen = el('section', 'screen');
-  screen.append(progressDots(state.playerCount, state.turn));
+  screen.append(progressDots(seats, state.turn));
   const card = el('section', 'card card--gate');
   card.append(el('span', 'card__hint', label));
   card.append(el('span', 'card__action', action));
@@ -1002,14 +1238,51 @@ function renderPassGate(label, action, onPass) {
   return screen;
 }
 
+/** @returns {Player[]} Those dealt in: everyone not sitting out, in seat order. */
+function activePlayers() {
+  return state.players.filter((p) => !p.out);
+}
+
+/**
+ * @param {string} id
+ * @returns {Player | undefined}
+ */
+function playerById(id) {
+  return state.players.find((p) => p.id === id);
+}
+
+/**
+ * A player's name for display. Every id shown comes from the roster, so the
+ * fallback is only ever a safety net.
+ *
+ * @param {string} id
+ * @returns {string}
+ */
+function nameOf(id) {
+  return playerById(id)?.name ?? 'Someone';
+}
+
+/**
+ * A placeholder name for a new player: "Player N" for their seat number, or the
+ * next number up that nobody at the table is already called.
+ *
+ * @returns {string}
+ */
+function nextDefaultName() {
+  const taken = new Set(state.players.map((p) => p.name.trim().toLowerCase()));
+  let n = state.players.length + 1;
+  while (taken.has(`player ${n}`)) n++;
+  return `Player ${n}`;
+}
+
 /**
  * Words in the pool that a given player added.
  *
- * @param {number} player
+ * @param {string} id
  * @returns {PoolEntry[]}
  */
-function wordsBy(player) {
-  return state.pool.filter((e) => e.by === player);
+function wordsBy(id) {
+  return state.pool.filter((e) => e.by === id);
 }
 
 /** @param {number} n @returns {string} e.g. "1 word", "3 words". */
@@ -1031,9 +1304,11 @@ function lonePoolWarning() {
   if (state.pool.length === 0) return null;
   const by = new Set(state.pool.map((e) => e.by));
   if (by.size !== 1) return null;
-  const [p] = by;
-  if (p < 0) return null; // words of unknown origin can't be anyone's own
-  return `Only Player ${p + 1} has words in the pool.`;
+  const [id] = by;
+  const p = playerById(id);
+  // A sitter's words are nobody's at the table, so they're never a problem.
+  if (!p || p.out) return null;
+  return `Only ${p.name} has words in the pool.`;
 }
 
 /**
@@ -1047,7 +1322,8 @@ function lonePoolWarningEl() {
 }
 
 /**
- * The entry roster: one tile per player. Each player taps their own to open
+ * The entry roster: one tile per player, sitters included — sitting out is
+ * about rounds, not words. Each player taps their own to open
  * their private page — in any order, as often as they like — so there's no
  * pass-around to sit through, and anyone can come back later for more. The
  * roster doubles as the "safe" screen between players: each tile's dot shows
@@ -1071,27 +1347,30 @@ function renderRoster() {
   );
 
   const grid = el('div', 'players');
-  for (let p = 0; p < state.playerCount; p++) {
+  state.players.forEach((player, seat) => {
     // Grey dot: nothing in the pool. Yellow: down to one word. Green: two or more.
-    const count = wordsBy(p).length;
+    const count = wordsBy(player.id).length;
     const status = count === 0 ? 'empty' : count === 1 ? 'low' : 'stocked';
     const tile = el('button', `player player--${status}`);
     /** @type {HTMLButtonElement} */ (tile).type = 'button';
+    if (player.out) tile.classList.add('player--out');
     // On screen the status is just a coloured dot; spell it out for screen readers.
     const spoken = { empty: 'no words yet', low: 'one word left', stocked: 'has words' }[status];
-    tile.setAttribute('aria-label', `Player ${p + 1}, ${spoken}`);
-    tile.append(el('span', 'player__name', `Player ${p + 1}`));
+    const sitting = player.out ? ', sitting out' : '';
+    tile.setAttribute('aria-label', `${player.name}, ${spoken}${sitting}`);
+    tile.append(el('span', 'player__name', player.name));
+    if (player.out) tile.append(el('span', 'player__tag', 'sitting out'));
     tile.addEventListener('click', () => {
       // Log the open first: render() persists it before the page can be seen.
       state.opens = recentOpens(state.opens);
-      state.opens.push({ p, t: Date.now() });
-      state.turn = p;
+      state.opens.push({ id: player.id, t: Date.now() });
+      state.turn = seat;
       state.gateOpen = true;
       state.entryHint = displayForm(state.settings.category);
       render();
     });
     grid.append(tile);
-  }
+  });
   screen.append(grid);
 
   const total = state.pool.length;
@@ -1133,7 +1412,7 @@ function opensHistory() {
   for (let k = opens.length - 1; k >= 0; k--) {
     const o = opens[k];
     const item = el('li', 'opens__item');
-    item.append(el('span', 'opens__who', `Player ${o.p + 1}`));
+    item.append(el('span', 'opens__who', nameOf(o.id)));
     item.append(el('span', 'opens__age', ageLabel(now - o.t)));
     list.append(item);
   }
@@ -1150,10 +1429,15 @@ function opensHistory() {
 function renderEntry() {
   if (!state.gateOpen) return renderRoster();
 
-  const i = state.turn;
+  const player = state.players[state.turn];
+  if (!player) {
+    state.gateOpen = false;
+    return renderRoster();
+  }
+  const me = player.id;
 
   const screen = el('section', 'screen');
-  screen.append(el('h2', 'screen__title', `Player ${i + 1}, add words`));
+  screen.append(el('h2', 'screen__title', `${player.name}, add words`));
   screen.append(
     el('p', 'screen__hint', 'Aim for 2+ words. Nobody sees who added what.'),
   );
@@ -1184,7 +1468,7 @@ function renderEntry() {
     const catKey = normaliseWord(state.settings.category);
     /** @type {Map<string, PoolEntry[]>} */
     const groups = new Map();
-    for (const e of wordsBy(i)) {
+    for (const e of wordsBy(me)) {
       const g = groups.get(normaliseWord(e.hint));
       if (g) g.push(e);
       else groups.set(normaliseWord(e.hint), [e]);
@@ -1227,11 +1511,11 @@ function renderEntry() {
     // Reject only an exact duplicate among this player's OWN words (so a
     // double-tap doesn't bloat their list). Duplicates across players are kept —
     // every word entered ends up in the pool.
-    if (wordsBy(i).some((e) => normaliseWord(e.word) === norm)) return;
+    if (wordsBy(me).some((e) => normaliseWord(e.word) === norm)) return;
     state.pool.push({
       word: displayForm(raw),
       hint: displayForm(state.entryHint),
-      by: i,
+      by: me,
     });
     save();
     renderChips();
@@ -1294,12 +1578,14 @@ function renderReveal() {
     state.phase = 'home';
     return renderHome();
   }
+  const seats = round.players;
   const i = state.turn;
-  const isLast = i >= state.playerCount - 1;
+  const isLast = i >= seats.length - 1;
 
   if (!state.gateOpen) {
     return renderPassGate(
-      `Pass to Player ${i + 1}.`,
+      seats.length,
+      `Pass to ${nameOf(seats[i])}.`,
       'Show my screen',
       () => {
         state.gateOpen = true;
@@ -1309,7 +1595,7 @@ function renderReveal() {
   }
 
   const screen = el('section', 'screen');
-  screen.append(progressDots(state.playerCount, state.turn));
+  screen.append(progressDots(seats.length, i));
 
   const assignment = round.assignments[i];
   const tapHint = isLast ? 'Tap to hide & start playing' : 'Tap to hide & pass on';
@@ -1369,7 +1655,7 @@ function renderPlay() {
   );
 
   screen.append(
-    el('p', 'play__starter', `\u{1F449} Player ${round.starter + 1} starts.`),
+    el('p', 'play__starter', `\u{1F449} ${nameOf(round.players[round.starter])} starts.`),
   );
 
   const reveal = el('button', 'btn', 'Reveal the answer');
@@ -1395,7 +1681,7 @@ function renderResult() {
   const impostors = round.assignments
     .map((a, idx) => (a.impostor ? idx : -1))
     .filter((idx) => idx >= 0);
-  const names = impostors.map((idx) => `Player ${idx + 1}`);
+  const names = impostors.map((idx) => nameOf(round.players[idx]));
 
   const card = el('section', 'card card--result');
 
@@ -1410,7 +1696,7 @@ function renderResult() {
       card.append(el('span', 'result__line', 'There was never a shared one.'));
       const list = el('ul', 'result__list');
       round.assignments.forEach((a, idx) => {
-        list.append(el('li', undefined, `Player ${idx + 1}: ${a.word ?? '—'}`));
+        list.append(el('li', undefined, `${nameOf(round.players[idx])}: ${a.word ?? '—'}`));
       });
       card.append(list);
     } else {
@@ -1431,7 +1717,7 @@ function renderResult() {
           el(
             'span',
             'result__decoy',
-            `Player ${idx + 1} was secretly given: ${decoyWord ?? '—'}`,
+            `${nameOf(round.players[idx])} was secretly given: ${decoyWord ?? '—'}`,
           ),
         );
       });
@@ -1494,6 +1780,13 @@ function render() {
       break;
   }
   app.replaceChildren(screen);
+  // An input flagged for focus gets it now that it's in the document. This runs
+  // inside the tap that asked for it, which is what lets a phone show the keyboard.
+  const focus = screen.querySelector('[data-autofocus]');
+  if (focus instanceof HTMLInputElement) {
+    focus.focus();
+    focus.select();
+  }
   save();
 }
 
