@@ -762,14 +762,14 @@
 }
 
 /* A group's hint: tap to copy it into the hint input. The one matching the
-   input is marked selected. */
+   input is marked selected with a tab-style underline — not a pill outline,
+   which would make the heading look like one more chip in the row below. */
 .chipgroup__title {
   align-self: flex-start;
-  /* Pull the pill's padding back so the text stays flush with the chips. */
-  margin: 0 0 0 calc(-1 * var(--space-2));
-  padding: var(--space-1) var(--space-2);
-  border: 1px solid transparent;
-  border-radius: 999px;
+  margin: 0;
+  padding: var(--space-1) 0;
+  border: none;
+  border-bottom: 2px solid transparent;
   background: none;
   color: var(--text-muted);
   text-align: left;
@@ -781,13 +781,17 @@
 }
 
 .chipgroup__title:hover {
-  border-color: var(--border);
   color: var(--text);
+}
+
+.chipgroup__title:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .chipgroup__title--selected,
 .chipgroup__title--selected:hover {
-  border-color: var(--accent);
+  border-bottom-color: var(--accent);
   color: var(--accent);
 }
 
