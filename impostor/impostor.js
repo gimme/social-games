@@ -982,10 +982,15 @@ function renderHome() {
 }
 
 /**
- * The Home lineup: who's at the table, by name. Each row's ⋮ menu renames the
- * player, sits them out (or brings them back), or removes them. Sitting out
- * keeps the player and their words — the round just deals around them — while
- * removing takes their words with them, so it asks first when there are any.
+ * The Home lineup: who's at the table, by name, in seat order. Each row's ⋮
+ * menu renames the player, sits them out (or brings them back), or removes
+ * them; the ⠿ grip drags them to another seat. Sitting out keeps the player
+ * and their words — the round just deals around them — while removing takes
+ * their words with them, so it asks first when there are any.
+ *
+ * Seat order is the order the phone goes round: the entry roster lists players
+ * in it, and the reveal passes the phone along it. A lineup that matches the
+ * table means the phone always goes to the next person along.
  *
  * @returns {HTMLElement}
  */
@@ -1004,7 +1009,7 @@ function renderLineup() {
   field.append(labelWrap);
 
   const list = el('ul', 'lineup');
-  for (const p of state.players) list.append(lineupRow(p));
+  for (const p of state.players) list.append(lineupRow(p, list));
   field.append(list);
 
   const add = el('button', 'btn btn--ghost lineup__add', '+ Add player');
@@ -1023,15 +1028,18 @@ function renderLineup() {
 }
 
 /**
- * One lineup row: the name (or, while renaming, an input in its place), a
- * "sitting out" tag when it applies, and the ⋮ menu.
+ * One lineup row: the ⠿ grip, the name (or, while renaming, an input in its
+ * place), a "sitting out" tag when it applies, and the ⋮ menu.
  *
  * @param {Player} p
+ * @param {HTMLElement} list   The lineup the row belongs to; a drag reorders it live.
  * @returns {HTMLElement}
  */
-function lineupRow(p) {
+function lineupRow(p, list) {
   const row = el('li', 'lineup__row');
+  row.dataset.id = p.id;
   if (p.out) row.classList.add('lineup__row--out');
+  row.append(grip(p, row, list));
 
   if (state.editing === p.id) {
     const input = /** @type {HTMLInputElement} */ (el('input', 'field__input lineup__input'));
@@ -1045,15 +1053,16 @@ function lineupRow(p) {
     input.dataset.autofocus = '';
     // Enter and blur both commit; Escape cancels. A commit re-renders, which
     // can fire a blur of its own, so make sure it only happens once.
+    // A drag on a grip closes the rename itself, so a blur that arrives after
+    // that (some browsers fire one as the input leaves the page) has nothing
+    // left to do.
     let done = false;
     /** @param {boolean} keep */
     const finish = (keep) => {
       if (done) return;
       done = true;
-      if (keep) {
-        const name = input.value.trim().replace(/\s+/g, ' ');
-        if (name) p.name = name;
-      }
+      if (state.editing !== p.id) return;
+      if (keep) setName(p, input.value);
       state.editing = null;
       render();
     };
@@ -1106,6 +1115,146 @@ function lineupRow(p) {
   ]);
   row.append(button, menu);
   return row;
+}
+
+/**
+ * The ⠿ grip on a lineup row. Dragging it carries the row up or down the list,
+ * the others sliding out of its way as it goes, and letting go seats the
+ * player where it landed. A drag only ever translates rows — the DOM and state
+ * stay put until the drop — so cancelling (Escape, or the browser taking the
+ * pointer back) just re-renders from state, which puts everything back.
+ * Reordering the DOM mid-drag would also release the pointer capture, after
+ * which the drag would only follow a finger still over the grip.
+ *
+ * @param {Player} p
+ * @param {HTMLElement} row    The row this grip sits in.
+ * @param {HTMLElement} list   The lineup the row belongs to.
+ * @returns {HTMLElement}
+ */
+function grip(p, row, list) {
+  const handle = el('button', 'lineup__grip');
+  /** @type {HTMLButtonElement} */ (handle).type = 'button';
+  handle.setAttribute('aria-label', `Move ${p.name}`);
+  handle.title = 'Drag to reorder';
+
+  // A long press on a phone would otherwise pop a context menu and cancel the drag.
+  handle.addEventListener('contextmenu', (e) => e.preventDefault());
+
+  handle.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    // Don't move focus or start a text selection — in particular, don't blur a
+    // rename in progress, whose re-render would pull the list out from under
+    // the drag. Starting a drag ends the rename instead, keeping what was typed.
+    e.preventDefault();
+    if (state.editing !== null) commitRename();
+
+    // Measured once: nothing below changes layout, so these hold until the drop.
+    const rows = Array.from(list.querySelectorAll('li'));
+    const boxes = rows.map((r) => r.getBoundingClientRect());
+    const listBox = list.getBoundingClientRect();
+    const from = rows.findIndex((r) => r === row);
+    const mine = boxes[from];
+    const grab = e.clientY - mine.top;
+    let target = from;
+    handle.setPointerCapture(e.pointerId);
+    row.classList.add('lineup__row--dragging');
+
+    /** @param {PointerEvent} ev */
+    const onMove = (ev) => {
+      // The row rides under the finger, kept within the list...
+      const top = clamp(ev.clientY - grab, listBox.top, listBox.bottom - mine.height);
+      const bottom = top + mine.height;
+      row.style.transform = `translateY(${top - mine.top}px)`;
+      // ...and takes the seat of the topmost row above whose middle its top
+      // edge has passed, or the lowest row below whose middle its bottom edge
+      // has. The thresholds are the others' resting middles, which never move,
+      // so there's nothing to jitter; and pinned to either end of the list it
+      // always counts as past the end row, whatever their exact heights.
+      target = from;
+      boxes.forEach((b, i) => {
+        const middle = b.top + b.height / 2;
+        if (i < from && top < middle && i < target) target = i;
+        else if (i > from && bottom > middle) target = i;
+      });
+      // Rows between the old seat and the new step aside by its height.
+      rows.forEach((r, i) => {
+        if (i === from) return;
+        let dy = 0;
+        if (from < i && i <= target) dy = -mine.height;
+        else if (target <= i && i < from) dy = mine.height;
+        r.style.transform = dy === 0 ? '' : `translateY(${dy}px)`;
+      });
+    };
+    let active = true;
+    /** @param {boolean} commit */
+    const end = (commit) => {
+      if (!active) return;
+      active = false;
+      handle.removeEventListener('pointermove', onMove);
+      handle.removeEventListener('pointerup', onUp);
+      handle.removeEventListener('pointercancel', onCancel);
+      handle.removeEventListener('lostpointercapture', onLost);
+      document.removeEventListener('keydown', onKey);
+      if (commit) movePlayer(p, target);
+      render();
+    };
+    const onUp = () => end(true);
+    const onCancel = () => end(false);
+    // Capture is released after pointerup too; only a grip that has left the
+    // page (something else re-rendered mid-drag) needs tidying up here.
+    const onLost = () => {
+      if (!handle.isConnected) end(false);
+    };
+    /** @param {KeyboardEvent} ev */
+    const onKey = (ev) => {
+      if (ev.key === 'Escape') end(false);
+    };
+    handle.addEventListener('pointermove', onMove);
+    handle.addEventListener('pointerup', onUp);
+    handle.addEventListener('pointercancel', onCancel);
+    handle.addEventListener('lostpointercapture', onLost);
+    document.addEventListener('keydown', onKey);
+  });
+
+  return handle;
+}
+
+/**
+ * Seat a player elsewhere in the lineup, shifting the others along.
+ *
+ * @param {Player} p
+ * @param {number} seat   Where to put them; clamped to the lineup.
+ * @returns {boolean} Whether anything moved.
+ */
+function movePlayer(p, seat) {
+  const from = state.players.indexOf(p);
+  const to = clamp(seat, 0, state.players.length - 1);
+  if (from === -1 || from === to) return false;
+  state.players.splice(from, 1);
+  state.players.splice(to, 0, p);
+  return true;
+}
+
+/**
+ * Give a player a typed name, tidied; blank leaves the old one.
+ *
+ * @param {Player} p
+ * @param {string} raw
+ */
+function setName(p, raw) {
+  const name = raw.trim().replace(/\s+/g, ' ');
+  if (name) p.name = name;
+}
+
+/**
+ * Close the rename in progress, keeping what's been typed. Doesn't render:
+ * for the grip, which needs the list to stay put until its drag is over.
+ */
+function commitRename() {
+  const p = state.editing !== null ? playerById(state.editing) : undefined;
+  const input = app.querySelector('.lineup__input');
+  if (p && input instanceof HTMLInputElement) setName(p, input.value);
+  state.editing = null;
 }
 
 /**

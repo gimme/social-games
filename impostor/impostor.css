@@ -138,9 +138,11 @@
 }
 
 /*
- * Home lineup — who's at the table, by name. One row per player; the ⋮ opens
- * a small menu (rename, sit out / rejoin, remove). A row being renamed swaps
- * its name for an input.
+ * Home lineup — who's at the table, by name, in seat order. One row per
+ * player: a ⠿ grip drags it to another seat, and the ⋮ opens a small menu
+ * (rename, sit out / rejoin, remove). A row being renamed
+ * swaps its name for an input; a row being dragged lifts off the list and
+ * rides along under the pointer, the others sliding aside.
  */
 .field--lineup {
   flex-direction: column;
@@ -168,6 +170,69 @@
 
 .lineup__row:first-child {
   border-top: none;
+}
+
+/* Rows only ever move while one is dragged: the others slide out of its way. */
+.lineup__row {
+  transition: transform 150ms ease;
+}
+
+.lineup__row--dragging {
+  z-index: 1;
+  margin: 0 calc(-1 * var(--space-2));
+  padding-inline: var(--space-2);
+  border-top-color: transparent;
+  border-radius: 10px;
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow);
+  transition: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .lineup__row {
+    transition: none;
+  }
+}
+
+/* Six dots, drawn rather than typed so they look the same on every phone. */
+.lineup__grip {
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  width: 2.25rem;
+  height: 2.25rem;
+  margin-left: calc(-1 * var(--space-2));
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: grab;
+  /* Dragging the grip must never scroll the page, or the browser cancels it. */
+  touch-action: none;
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+.lineup__grip::before {
+  content: '';
+  width: 12px;
+  height: 18px;
+  background: radial-gradient(circle, currentColor 1.5px, transparent 1.9px) 0 0 / 6px 6px;
+}
+
+.lineup__grip:hover {
+  color: var(--text);
+}
+
+.lineup__grip:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.lineup__row--dragging .lineup__grip {
+  color: var(--text);
+  cursor: grabbing;
 }
 
 .lineup__name {
