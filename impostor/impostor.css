@@ -543,22 +543,6 @@
   font-size: 2rem;
 }
 
-/* The out-of-the-way "skip this round" link under the hint card. */
-.screen__skip {
-  align-self: center;
-  margin-top: var(--space-8);
-  padding: var(--space-2) var(--space-3);
-  border: none;
-  background: none;
-  color: var(--text-muted);
-  font-size: 0.9rem;
-}
-
-.screen__skip:hover {
-  color: var(--text);
-  text-decoration: underline;
-}
-
 /*
  * The overt-impostor card. Note: in a DECOY round the impostor sees the
  * .card--word screen (identical to a crewmate), never this one — so this

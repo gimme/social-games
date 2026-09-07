@@ -35,6 +35,12 @@
  * someone else's page. Instead the roster keeps a short history of which pages
  * were opened and how long ago, so a peek doesn't go unnoticed by the table.
  *
+ * The browser's own back (button, gesture, edge swipe) steps up one screen: a
+ * player's page to the roster, the roster to Home, the round's hint back to
+ * Home (cancelling the round), the result to Home. Once roles go out, back does
+ * nothing, so a stray swipe can't knock the table out of a round. Home is the
+ * root: back there leaves the game, as it always did.
+ *
  * Self-contained: this game imports nothing and is the only script on its page.
  *
  * The pure round-building logic (buildRound) is DOM-free so it can be exercised
@@ -104,8 +110,9 @@ const OPENS_WINDOW_MS = 10 * 60 * 1000;
  * @property {boolean} decoy                 Did the decoy modifier actually apply.
  * @property {string | null} realWord        Shared crew word; null for everyone-impostor.
  * @property {string} hint                   Shown to the whole table before roles go out; '' for none.
- * @property {PoolEntry[]} decoys            Entries handed out as decoy words. Returned to the
- *                                           pool if the round is skipped (the real word stays used up).
+ * @property {PoolEntry[]} drawn             Every entry the round consumed: the crew's word (when
+ *                                           there is one) and any decoys. Put back if the round is
+ *                                           cancelled at its hint.
  * @property {string[]} players              Ids of those dealt in, in seat order.
  * @property {number} starter                Seat (index into players) who starts the clues.
  * @property {Assignment[]} assignments      Per seat: assignments[i] belongs to players[i].
@@ -367,7 +374,7 @@ function buildRound(players, pool, settings) {
   /** @type {string | null} */
   let realWord = null;
   /** @type {PoolEntry[]} */
-  const decoys = [];
+  const drawn = [];
   /** @type {Assignment[] | null} */
   let assignments = null;
 
@@ -389,10 +396,10 @@ function buildRound(players, pool, settings) {
           const fresh = withHint(hk).filter((i) => !used.has(wordKey(work[i])));
           const entry = take(fresh[randInt(fresh.length)]);
           used.add(normaliseWord(entry.word));
-          decoys.push(entry);
+          drawn.push(entry);
           assignments.push({ word: entry.word, impostor: true });
         }
-        hint = decoys[0].hint;
+        hint = drawn[0].hint;
       }
     }
     if (!decoy) {
@@ -429,6 +436,7 @@ function buildRound(players, pool, settings) {
       const byPlayer = [...groupBy(pickFrom, (e) => e.by).values()];
       const theirs = byPlayer[randInt(byPlayer.length)];
       real = take(theirs[randInt(theirs.length)]);
+      drawn.push(real);
       realWord = real.word;
       hint = real.hint;
     }
@@ -449,7 +457,7 @@ function buildRound(players, pool, settings) {
       const pickFrom = fresh.length > 0 ? fresh : candidates;
       const entry = take(pickFrom[randInt(pickFrom.length)]);
       usedDecoyKeys.add(normaliseWord(entry.word));
-      decoys.push(entry);
+      drawn.push(entry);
       return entry.word;
     };
 
@@ -468,7 +476,7 @@ function buildRound(players, pool, settings) {
   const starter = randInt(n);
 
   return {
-    round: { type, decoy, realWord, hint, decoys, players, starter, assignments },
+    round: { type, decoy, realWord, hint, drawn, players, starter, assignments },
     pool: work,
   };
 }
@@ -575,7 +583,7 @@ function load() {
     if (data.round && typeof data.round === 'object') {
       const r = data.round;
       if (typeof r.hint !== 'string') r.hint = '';
-      r.decoys = Array.isArray(r.decoys) ? parseEntries(r.decoys) : [];
+      r.drawn = Array.isArray(r.drawn) ? parseEntries(r.drawn) : [];
       // The seats must line up with the assignments, or the pass-around would
       // hand out the wrong screens.
       const seated =
@@ -814,6 +822,7 @@ function goHome() {
 
 /** Open the entry roster (always append mode — never resets the pool). */
 function goEntry() {
+  pushScreen();
   state.phase = 'entry';
   state.turn = 0;
   state.gateOpen = false;
@@ -829,15 +838,16 @@ function startRound() {
   const seats = activePlayers().map((p) => p.id);
   const draw = drawPool();
   if (draw.length === 0 || seats.length < MIN_PLAYERS) return;
-  const { round, pool } = buildRound(seats, draw, state.settings);
-  // buildRound hands back the drawn-from words it didn't use, as the same
-  // objects: whatever's missing was consumed. Drop just those from the full
-  // pool, so words under other hints stay put and in order.
-  const used = new Set(draw);
-  for (const e of pool) used.delete(e);
+  const { round } = buildRound(seats, draw, state.settings);
+  // Drop just what the round drew (the same objects) from the full pool, so
+  // words under other hints stay put and in order.
+  const used = new Set(round.drawn);
   state.pool = state.pool.filter((e) => !used.has(e));
   state.round = round;
   state.phase = 'hint';
+  // From Home (or after a reload) the round is a step down; Play again from
+  // the result stays at the round's own level.
+  if (depth === 0) pushScreen();
   render();
 }
 
@@ -850,15 +860,99 @@ function startReveal() {
 }
 
 /**
- * Drop the round before roles go out. The word behind the hint stays used up
- * (so the same hint doesn't come straight back); decoys quietly return to the
- * pool.
+ * Cancel the round before roles go out (what back does on the hint screen):
+ * everything it drew goes back to the pool, as if it had never started.
  */
-function skipRound() {
-  if (state.round) state.pool = state.pool.concat(state.round.decoys);
+function cancelRound() {
+  if (state.round) state.pool = state.pool.concat(state.round.drawn);
   state.round = null;
   goHome();
 }
+
+// --- browser back ----------------------------------------------------------
+
+/*
+ * The screens form a short tree under Home (Home > roster > player's page;
+ * Home > round), and the browser's back steps up it. State stays the single
+ * truth: a history entry records only how far below Home it sits and which
+ * page load pushed it, so popstate can tell how many levels to step up — and
+ * can recognise entries left over from before a reload, which it takes as one
+ * plain back press each.
+ *
+ * Up-steps from on-screen buttons go through the history too (goUp), so the
+ * stack never drifts from what's shown.
+ */
+
+/** Tags this page load's entries; anything else on the stack is from before a reload. */
+const LOAD = Date.now();
+
+/** How many entries this load has pushed above the one it started on. */
+let depth = 0;
+
+/** Push an entry for the screen about to show, so back can return from it. */
+function pushScreen() {
+  depth += 1;
+  history.pushState({ impostor: LOAD, depth }, '');
+}
+
+/**
+ * Step up one screen from a button. Pops the history entry when this load
+ * pushed one (popstate then does the step), else steps directly.
+ */
+function goUp() {
+  if (depth > 0) history.back();
+  else goBack();
+}
+
+/**
+ * Step up one screen from wherever the state is: a player's page to the
+ * roster, the roster to Home, the hint to Home (cancelling the round), the
+ * result to Home.
+ *
+ * @returns {boolean} False when there is nowhere to go: Home is the root, and
+ *   a round with roles out isn't backed out of.
+ */
+function goBack() {
+  switch (state.phase) {
+    case 'entry':
+      if (state.gateOpen) {
+        state.gateOpen = false;
+        render();
+      } else {
+        goHome();
+      }
+      return true;
+    case 'hint':
+      cancelRound();
+      return true;
+    case 'result':
+      goHome();
+      return true;
+    default:
+      return false;
+  }
+}
+
+window.addEventListener('popstate', (e) => {
+  const entry = e.state;
+  if (!entry || entry.impostor !== LOAD || typeof entry.depth !== 'number') {
+    // Left over from before a reload: take it as one plain back press. With
+    // nowhere to step up to, keep leaving from Home, or stay put in a round.
+    depth = 0;
+    if (goBack()) return;
+    if (state.phase === 'home') history.back();
+    else history.forward();
+    return;
+  }
+  // Forward isn't a thing here: bounce straight back.
+  if (entry.depth > depth) {
+    history.go(depth - entry.depth);
+    return;
+  }
+  while (depth > entry.depth && goBack()) depth -= 1;
+  // Whatever wouldn't step up (a round with roles out) stays: undo the pop.
+  if (depth > entry.depth) history.go(depth - entry.depth);
+});
 
 // --- screens ---------------------------------------------------------------
 
@@ -1636,6 +1730,7 @@ function renderRoster() {
       state.turn = seat;
       state.gateOpen = true;
       state.entryHint = displayForm(state.settings.category);
+      pushScreen();
       render();
     });
     grid.append(tile);
@@ -1654,7 +1749,7 @@ function renderRoster() {
   if (warn) screen.append(warn);
 
   const done = el('button', 'btn', 'Done adding words');
-  done.addEventListener('click', () => goHome());
+  done.addEventListener('click', () => goUp());
   screen.append(done);
 
   const history = opensHistory();
@@ -1825,10 +1920,7 @@ function renderEntry() {
   renderChips();
 
   const done = el('button', 'btn', 'Done');
-  done.addEventListener('click', () => {
-    state.gateOpen = false;
-    render();
-  });
+  done.addEventListener('click', () => goUp());
   screen.append(done);
 
   return screen;
@@ -1836,8 +1928,8 @@ function renderEntry() {
 
 /**
  * The round opener: the hint behind this round's word, shown to the whole
- * table (impostor included) before roles go out. Skipping is tucked away —
- * it's a rare thing to want.
+ * table (impostor included) before roles go out. There's no button out: the
+ * browser's back cancels the round and returns Home (see goBack).
  */
 function renderHint() {
   const round = state.round;
@@ -1857,11 +1949,6 @@ function renderHint() {
   card.append(el('span', 'card__tap', 'Tap to pass out roles'));
   makeTappable(card, startReveal);
   screen.append(card);
-
-  const skip = el('button', 'screen__skip', 'Skip this round');
-  /** @type {HTMLButtonElement} */ (skip).type = 'button';
-  skip.addEventListener('click', skipRound);
-  screen.append(skip);
 
   return screen;
 }
@@ -2047,7 +2134,7 @@ function renderResult() {
   screen.append(again);
 
   const home = el('button', 'btn btn--ghost', 'Back to home');
-  home.addEventListener('click', () => goHome());
+  home.addEventListener('click', () => goUp());
   screen.append(home);
 
   return screen;
@@ -2091,6 +2178,8 @@ function render() {
 
 load();
 render();
+// Whatever screen the page opened on is this load's root; back from it leaves.
+history.replaceState({ impostor: LOAD, depth: 0 }, '');
 
 // Exported for the headless simulation/tests. Harmless in the browser.
 export { buildRound, rollType, impostorCountForType, normalPct };
